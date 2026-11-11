@@ -20,7 +20,7 @@ algorithm variants under identical scenarios.
 - Algorithm comparisons: A1 (5 subjects, 24 h), A2 (paired matrix, 30 subjects × 4 scenarios,
   bootstrap CI + Wilcoxon), A3 (CF from the model vs the 1700/TDI rule), A4 (fault catalogue),
   A5 (autoISF under faults), A6 (extended cohort, CGM noise, preference overrides), A7 (120
-  subjects × 3 cohort seeds).
+  subjects × 3 cohort seeds), A8 (sensor models vs real CGM traces, meal announcement errors).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
@@ -84,10 +84,15 @@ and `server/live.py`:
 |---|---|
 | `--cohort-copies N` | add N absorption-perturbed copies per base subject (30 → 30·(1+N)) |
 | `--cohort-seed` | deterministic perturbation seed |
-| `--noise residuals\|ar1\|white\|none` | CGM noise model |
+| `--noise residuals\|ar1\|white\|none\|facchinetti\|dexcom` | CGM noise/sensor model |
 | `--noise-scale` | amplitude multiplier (e.g. 1.5 for a noisier sensor) |
 | `--noise-sigma`, `--noise-ar1` | AR(1)/white parameters, mg/dL and lag-1 correlation |
 | `--pref KEY=VALUE` | override any AAPS preference (autoISF weights, SMB limits, ...) |
+
+`facchinetti` and `dexcom` are the published sensor-error models (Facchinetti 2014; Vettoretti 2019
+Dexcom G6), implemented from the papers and cross-checked against LoopInsighT1 (MIT). Meal
+announcement errors are scenario fields: `announce_amount_error_frac`, `announce_time_error_min`,
+`announce_lead_min` (scenario `announced-error` in `a2_matrix.py`).
 
 The same values can come from the environment (CLI wins, then env, then built-in defaults):
 

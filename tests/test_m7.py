@@ -161,3 +161,25 @@ def test_on_cycle_callback_fires_once_per_cycle() -> None:
     result = _run(subject, Scenario(duration_min=30), on_cycle=capture)
     assert [length for length, _ in lengths] == list(range(1, len(result.time) + 1))
     assert [time for _, time in lengths] == result.time
+
+
+def test_announced_amount_error_increases_cob() -> None:
+    subject = load_subject("adult#001")
+    base = _run(subject, Scenario(duration_min=180, meals=[(60.0, 50.0)], meal_mode="announced"))
+    over = _run(subject, Scenario(
+        duration_min=180, meals=[(60.0, 50.0)], meal_mode="announced",
+        announce_amount_error_frac=0.2,
+    ))
+    assert max(over.cob) > max(base.cob) * 1.1
+
+
+def test_announced_lead_starts_cob_earlier() -> None:
+    subject = load_subject("adult#001")
+    base = _run(subject, Scenario(duration_min=180, meals=[(60.0, 50.0)], meal_mode="announced"))
+    lead = _run(subject, Scenario(
+        duration_min=180, meals=[(60.0, 50.0)], meal_mode="announced",
+        announce_lead_min=30.0,
+    ))
+    first_base = next(index for index, cob in enumerate(base.cob) if cob > 0)
+    first_lead = next(index for index, cob in enumerate(lead.cob) if cob > 0)
+    assert first_lead < first_base

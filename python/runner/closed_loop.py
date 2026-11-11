@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from cgm.noise import AR1Noise, BlockNoise, WhiteNoise
+from cgm.sensors import make_sensor
 from exercise.model import ExerciseSession
 from pump.pump import Pump, PumpConfig
 from simcore.model import Bolus, Meal, Schedule, TimeVarying, simulate
@@ -40,6 +41,9 @@ class Scenario:
     suspend: tuple[float, float] | None = None  # (start_min, duration_min)
     cgm_gap: tuple[float, float] | None = None
     cgm_bias: tuple[float, float, float] | None = None  # (start_min, duration_min, mg/dL)
+    announce_time_error_min: float = 0.0
+    announce_amount_error_frac: float = 0.0
+    announce_lead_min: float = 0.0
     si_multipliers: tuple[float, float, float] | None = None
     dawn_egp: float = 0.0
 
@@ -69,9 +73,11 @@ def init_bridge(bridge, subject: Subject, prefs: dict, insulin: dict, profile: A
     treatments: list[dict] = []
     if scenario.meal_mode == "announced":
         for time_min, grams in scenario.meals:
+            announced_min = time_min + scenario.announce_time_error_min - scenario.announce_lead_min
+            announced_grams = grams * (1.0 + scenario.announce_amount_error_frac)
             treatments.append({
-                "kind": "carbs", "ts": EPOCH0_MS + int(time_min * 60_000),
-                "amount": grams, "duration": 0,
+                "kind": "carbs", "ts": EPOCH0_MS + int(max(0.0, announced_min) * 60_000),
+                "amount": announced_grams, "duration": 0,
             })
     bridge.request({
         "cmd": "init", "prefs": prefs, "profiles": [], "insulin": insulin,
@@ -102,7 +108,10 @@ def run_closed_loop(
     one-temp-per-cycle approximation."""
     scenario = scenario or Scenario()
     pump = Pump(pump_config or PumpConfig())
-    if noise_kind == "residuals" and residuals is not None:
+    sensor = make_sensor(noise_kind, seed) if noise_kind in ("facchinetti", "dexcom") else None
+    if sensor is not None:
+        noise = None
+    elif noise_kind == "residuals" and residuals is not None:
         noise = BlockNoise(residuals, seed=seed, scale=noise_scale)
     elif noise_kind == "ar1":
         noise = AR1Noise(noise_rho, noise_sigma * noise_scale, seed=seed)
@@ -192,7 +201,8 @@ def run_closed_loop(
             bias = 0.0
             if scenario.cgm_bias is not None and in_window(scenario.cgm_bias, t0):
                 bias = scenario.cgm_bias[2]
-            value = float(np.clip(np.round(g_sub + noise_values[cycle] + bias), 39.0, 400.0))
+            measured = sensor.measure(g_sub, t1) if sensor is not None else g_sub + noise_values[cycle]
+            value = float(np.clip(np.round(measured + bias), 39.0, 400.0))
             cgm_history.append([EPOCH0_MS + int(t1 * 60_000), value])
 
         now_ms = EPOCH0_MS + int(t1 * 60_000)

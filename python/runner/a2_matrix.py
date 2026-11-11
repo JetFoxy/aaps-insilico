@@ -55,6 +55,14 @@ SCENARIOS = {
         ),
         profile_scale=1.0,
     ),
+    "announced-error": dict(
+        scenario=Scenario(
+            name="announced-error", duration_min=8 * 60,
+            meals=[(2 * 60, 50.0), (5 * 60, 50.0)], meal_mode="announced",
+            announce_amount_error_frac=0.2, announce_time_error_min=15.0, announce_lead_min=10.0,
+        ),
+        profile_scale=1.0,
+    ),
     "fcl-profile-error-strong": dict(
         scenario=Scenario(
             name="fcl-profile-error-strong", duration_min=24 * 60,

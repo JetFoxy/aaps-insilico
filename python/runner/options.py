@@ -48,7 +48,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
                         help="extra absorption-perturbed copies per base subject (30 -> 30*(1+N))")
     parser.add_argument("--cohort-seed", type=int, default=int(env("SIM_COHORT_SEED", 20261111)))
     parser.add_argument("--noise", default=env("SIM_NOISE", "residuals"),
-                        choices=("residuals", "ar1", "white", "none"))
+                        choices=("residuals", "ar1", "white", "none", "facchinetti", "dexcom"))
     parser.add_argument("--noise-scale", type=float, default=float(env("SIM_NOISE_SCALE", 1.0)),
                         help="multiplier on the noise amplitude")
     parser.add_argument("--noise-sigma", type=float, default=float(env("SIM_NOISE_SIGMA", 2.49)),
