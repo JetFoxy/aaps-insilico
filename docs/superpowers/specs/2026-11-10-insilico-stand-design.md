@@ -358,6 +358,7 @@ look-ahead исправлен; `COB > 0` вне области W1).
 | A11 ✅ | устойчивость к форме шума: фикстур xDrip vs `resid_ma` vs `resid_quad`, 30 субъектов × 2 сценария | направление одинаково; TIR/TBR устойчивы, LBGI чувствителен к спектру (+0.16…+0.01) — `docs/acceptance/A11.md` |
 | A12 ✅ | MetaboNet (публичный parquet): загрузчик, остатки Medtronic Enlite | σ 1.40–1.74, наклон PSD 2.6; модели по σ в диапазоне, но «синее» — `docs/acceptance/A12.md` |
 | A13 ✅ | первое сравнение off / autoISF / DynISF, 6 субъектов × 24 ч FCL | DynISF между off и autoISF по TIR, SMB −26 %, но TBR 5.3 % и LBGI 1.38; инсулин в падении ниже, чем у off — `docs/acceptance/A13.md` |
+| A14 ✅ | off / autoISF / DynISF, 30 субъектов × 24 ч FCL, парная статистика | DynISF: TIR −2.3 п.п., TBR +3.7 п.п., LBGI +1.19 против off; инсулин в падении −8.8 п.п. против autoISF — `docs/acceptance/A14.md` |
 
 **Поправка 2026-11-11 (важно).** В контуре найден баг: SMB-болюсы попадали в журнал и в IOB,
 но не подавались в физиологическую модель. Исправлено (`Schedule.boluses` следующего сегмента,

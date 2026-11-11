@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
+from runner.a2_matrix import paired_stats
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
@@ -65,7 +66,15 @@ def main() -> int:
     for arm in ARMS:
         rows = [row["metrics"] for row in results if row["arm"] == arm]
         table[arm] = {key: float(np.mean([row[key] for row in rows])) for key in KEYS}
-    payload = {"elapsed_s": round(time.time() - started, 1), "subjects": names, "table": table, "rows": results}
+    by_key = {(row["subject"], row["arm"]): row["metrics"] for row in results}
+    pairs = {}
+    for left, right in (("off", "autoisf"), ("off", "dynisf"), ("autoisf", "dynisf")):
+        rows = [{"off": by_key[(name, left)], "on": by_key[(name, right)]} for name in names]
+        pairs[f"{left}_vs_{right}"] = {key: paired_stats(rows, key) for key in KEYS}
+    payload = {
+        "elapsed_s": round(time.time() - started, 1), "subjects": names,
+        "table": table, "pairs": pairs, "rows": results,
+    }
     out = ROOT / args.out
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -74,6 +83,12 @@ def main() -> int:
         t = table[arm]
         print(f"{arm:10s} {t['tir_70_180']:6.3f} {t['tbr_70']:6.3f} {t['lbgi']:6.2f} "
               f"{t['smb_count']:5.0f} {t['total_insulin']:6.1f} {t['insulin_while_falling_fraction']:6.3f}")
+    for label, block in pairs.items():
+        print(f"== {label}")
+        for key in ("tir_70_180", "tbr_70", "lbgi", "total_insulin", "insulin_while_falling_fraction"):
+            st = block[key]
+            print(f"   {key:30s} {st['off_mean']:.3f} -> {st['on_mean']:.3f} "
+                  f"diff={st['diff_mean']:+.3f} p={st['p_wilcoxon']:.4f}")
     print(f"written {out} ({payload['elapsed_s']} s)")
     return 0
 
