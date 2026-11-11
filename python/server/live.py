@@ -103,13 +103,13 @@ def worker(run_id: str, spec: dict) -> None:
                 scenario, si_multipliers=si_day(seed).multipliers, dawn_egp=1.5,
             )
         profile = profile_for(
-            subject, auto_isf, spec["isf_source"], spec["smb_ratio_3min"],
+            subject, auto_isf, spec["isf_source"], spec["smb_ratio_3min"], spec["algorithm"],
         )
         delay = 0.2 / max(spec["speed"], 0.1)
 
         channel.put({
             "type": "start", "subject": subject.name, "scenario": spec["scenario"],
-            "arm": "on" if auto_isf else "off", "duration_min": scenario.duration_min,
+            "arm": spec["arm"], "duration_min": scenario.duration_min,
             "cadence_min": 5.0, "meals": [[float(t), float(g)] for t, g in scenario.meals],
             "params": spec["echo"],
         })
@@ -214,7 +214,7 @@ class Handler(SimpleHTTPRequestHandler):
         scenario = payload.get("scenario")
         arm = payload.get("arm", "off")
         speed = float(payload.get("speed", 4))
-        if scenario not in SCENARIO_LABELS or arm not in ("off", "on"):
+        if scenario not in SCENARIO_LABELS or arm not in ("off", "on", "dynisf"):
             self._json({"error": "bad parameters"}, 400)
             return
         try:
@@ -230,6 +230,8 @@ class Handler(SimpleHTTPRequestHandler):
             "subject": cohort[subject_name],
             "scenario": scenario,
             "auto_isf": arm == "on",
+            "arm": arm,
+            "algorithm": "dynisf" if arm == "dynisf" else "autoisf",
             "speed": speed,
             "prefs": prefs,
             "isf_source": params["isf_source"],

@@ -48,14 +48,15 @@ def build_scenario(name: str) -> tuple[Scenario, PumpConfig | None]:
     raise ValueError(f"unknown scenario {name}")
 
 
-def profile_for(subject, auto_isf: bool, isf_source: str = "rule", smb_ratio_3min: float = 0.3) -> AlgorithmProfile:
+def profile_for(subject, auto_isf: bool, isf_source: str = "rule", smb_ratio_3min: float = 0.3, algorithm: str = "autoisf") -> AlgorithmProfile:
     cr = compute_cr(subject) or 10.5
     tdi = compute_tdi(subject, cr) or 40.0
     isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
     return AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
-        enable_auto_isf=auto_isf, smb_ratio_3min=smb_ratio_3min,
+        enable_auto_isf=auto_isf, smb_ratio_3min=smb_ratio_3min, algorithm=algorithm,
+        tdd=tdi,
     )
 
 

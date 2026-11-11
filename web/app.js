@@ -446,7 +446,27 @@
     let arm = "off";
     if (!available.includes(arm)) arm = available[0];
     const active = document.querySelector(".arm.active");
-    if (active && available.includes(active.dataset.arm)) arm = active.dataset.arm;
+    if (active && (available.includes(active.dataset.arm) || active.dataset.arm === "dynisf")) {
+      arm = active.dataset.arm;
+    }
+    if (arm === "dynisf") {
+      state.run = runs.find((r) => r.subject === subject && r.scenario === scenario && r.arm === "on");
+      state.upto = state.run.time.length;
+      state.hover = null;
+      state.playing = false;
+      el("play").textContent = "▶";
+      el("scrub").max = String(state.run.time.length - 1);
+      el("scrub").value = String(state.run.time.length - 1);
+      document.querySelectorAll(".arm").forEach((b) => {
+        const liveOnly = b.dataset.arm === "dynisf";
+        b.disabled = liveOnly ? !state.hasServer : !available.includes(b.dataset.arm);
+        b.classList.toggle("active", b.dataset.arm === arm);
+      });
+      drawCards();
+      drawDeltas();
+      draw();
+      return;
+    }
     state.run = runs.find((r) => r.subject === subject && r.scenario === scenario && r.arm === arm);
     state.upto = state.run.time.length;
     state.hover = null;
@@ -455,7 +475,8 @@
     el("scrub").max = String(state.run.time.length - 1);
     el("scrub").value = String(state.run.time.length - 1);
     document.querySelectorAll(".arm").forEach((b) => {
-      b.disabled = !available.includes(b.dataset.arm);
+      const liveOnly = b.dataset.arm === "dynisf";
+      b.disabled = liveOnly ? !state.hasServer : !available.includes(b.dataset.arm);
       b.classList.toggle("active", b.dataset.arm === arm);
     });
     drawCards();
