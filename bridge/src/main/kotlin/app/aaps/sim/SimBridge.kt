@@ -318,8 +318,10 @@ class Bridge {
             )
         }
         val sens = autoIsf.autoIsf(now, effective, tempTarget)
+        val status = pipeline.calculator.getGlucoseStatusData(allowOldData = false)
         return buildJsonObject {
             put("sens", sens)
+            put("status", status?.toJson() ?: JsonNull)
             put("console", buildJsonArray { autoIsf.console().forEach { add(JsonPrimitive(it)) } })
         }
     }
