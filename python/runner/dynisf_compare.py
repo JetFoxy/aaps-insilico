@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "python"))
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from runner.a2_matrix import paired_stats
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+from runner.options import add_options, load_cohort
 from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
 from simcore.population import compute_cf, compute_cr, compute_tdi
@@ -29,9 +30,8 @@ ARMS = ("off", "autoisf", "dynisf")
 KEYS = ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
 
 
-def run_task(task: tuple[str, str]) -> dict:
-    name, arm = task
-    subject = load_subject(name)
+def run_task(task: tuple[str, str, object]) -> dict:
+    name, arm, subject = task
     cr = compute_cr(subject) or 10.5
     tdi = compute_tdi(subject, cr) or 40.0
     profile = AlgorithmProfile(
@@ -55,10 +55,12 @@ def main() -> int:
     ap.add_argument("--subjects", type=int, default=6)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--out", default="out/dynisf_compare.json")
+    add_options(ap)
     args = ap.parse_args()
 
-    names = [name for name, _ in sorted(load_subjects().items())][: args.subjects]
-    tasks = [(name, arm) for arm in ARMS for name in names]
+    cohort = load_cohort(args.cohort_copies, args.cohort_seed)
+    names = [name for name, _ in sorted(cohort.items())][: args.subjects]
+    tasks = [(name, arm, cohort[name]) for arm in ARMS for name in names]
     started = time.time()
     with mp.Pool(processes=args.workers) as pool:
         results = pool.map(run_task, tasks, chunksize=1)

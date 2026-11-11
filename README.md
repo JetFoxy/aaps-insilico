@@ -24,7 +24,7 @@ algorithm variants under identical scenarios.
   A9 (cross-check against LoopInsighT1 / UVA-Padova T1DMS), A10 (direction check against the
   simglucose level-C run), A11 (robustness to the CGM noise shape), A12 (MetaboNet as a fourth
   real-CGM source), A13 (first off / autoISF / DynISF comparison), A14 (full 30-subject
-  off/autoISF/DynISF matrix).
+  off/autoISF/DynISF matrix), A15 (DynISF on the 120-subject cohort).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
