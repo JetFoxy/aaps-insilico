@@ -18,8 +18,10 @@ algorithm variants under identical scenarios.
   `DetermineBasalAutoISF`. Reports: [`docs/reports/W1.md`](docs/reports/W1.md) and
   [`docs/acceptance/`](docs/acceptance/).
 - Algorithm comparisons: A1 (5 subjects, 24 h), A2 (paired matrix, 30 subjects × 4 scenarios,
-  bootstrap CI + Wilcoxon), A3 (CF from the model vs the 1700/TDI rule), A4 (fault catalogue) and
+  bootstrap CI + Wilcoxon), A3 (CF from the model vs the 1700/TDI rule), A4 (fault catalogue),
   A5 (autoISF under faults), A6 (extended cohort, CGM noise, preference overrides).
+  English summary of every milestone and comparison:
+  [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
 ## Quickstart
 
