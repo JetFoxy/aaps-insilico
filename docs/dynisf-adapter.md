@@ -31,6 +31,23 @@ if (!dynIsfResult.tddPartsCalculated()) return Pair("TDD miss", null)
 `tddPartsCalculated()` requires all five TDD windows to be non-null, but in profile-sens mode their
 values are never used. So a **stub** returning a constant (the profile TDI, or zeros) is enough.
 
+## What the code needs (checked)
+
+- `TddCalculator` is a 7-method interface (`calculate`, `calculateToday`, `calculateDaily`,
+  `calculateInterval`, `calculateIntervalWithCachedDays`, `averageTDD`). A stub can return
+  `TDD(timestamp = now, totalAmount = profileTDI)` and
+  `AverageTDD(data = TDD(...), allDaysHaveCarbs = true)`.
+- `ProfileSealed.EPS` is already constructible: `Profiles.kt::ProfileRow.effectiveProfile(iCfg)`
+  builds one from basal/isf/ic/target blocks; the sim profile comes from the request, so a
+  single-block `EPS` helper is needed.
+- `OpenAPSSMBPlugin` constructor: 25 dependencies; `DetermineBasalSMB(profileUtil, fabricPrivacy)`
+  and `GlucoseStatusCalculatorSMB(logger, iobCobCalculator, dateUtil, ConsoleDecimalFormatter(),
+  DeltaCalculator(logger))` are the two real ones, the rest are proxies (same pattern as
+  `AutoIsfRunner`).
+- `getIsfMgdl(eps, "bench")` is the entry point that runs the real DynISF formula.
+- The decision function is `DetermineBasalSMB.determine_basal(..., dynIsfMode = true, smb_ratio)`,
+  which takes `OapsProfile` (not `OapsProfileAutoIsf`), so a second profile mapper is needed.
+
 ## Design
 
 1. **Bridge command `dynisf`** (new), mirroring `autoisf`:
