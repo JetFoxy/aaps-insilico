@@ -1,5 +1,8 @@
 # aaps-insilico
 
+[![demo](https://img.shields.io/badge/demo-live-brightgreen)](https://jetfoxy.github.io/aaps-insilico/)
+[![license: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
 In-silico test bench for AAPS + autoISF: real algorithm code in a closed loop with a
 UVA/Padova-like virtual patient (Visentin et al. 2018 equations), CGM lag/noise, and
 physical exercise.
@@ -45,6 +48,9 @@ from the host's pinned AAPS worktree rather than cloning it, because the pinned 
 AAPS sources never enter the image, only the compiled classpath (84 MB).
 
 ## Demo UI
+
+Hosted demo: **https://jetfoxy.github.io/aaps-insilico/** (precomputed runs; live mode needs the
+local server below).
 
 `web/` is a dependency-free static page that replays precomputed closed-loop runs: glucose (CGM vs
 plasma), IOB, temp basal, SMB markers, meals, the algorithm `reason` for every cycle, and summary

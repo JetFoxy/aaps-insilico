@@ -1,0 +1,134 @@
+cff-version: 1.2.0
+message: "If you use this bench, cite the repository and the model papers it is built on."
+title: "aaps-insilico: in-silico test bench for AndroidAPS + autoISF"
+abstract: >-
+  Closed-loop test bench that runs the real AndroidAPS autoISF algorithm code against a
+  UVA/Padova-like virtual cohort, with CGM lag/noise, exercise, pump limits and fault injection.
+  It is not a clinical tool and not an FDA-adopted population; output is a comparison of algorithm
+  variants under identical scenarios.
+type: software
+license: GPL-3.0-or-later
+repository-code: "https://github.com/JetFoxy/aaps-insilico"
+url: "https://jetfoxy.github.io/aaps-insilico/"
+version: "0.1.0"
+date-released: "2026-11-11"
+keywords:
+  - type 1 diabetes
+  - closed loop
+  - AndroidAPS
+  - autoISF
+  - in silico
+  - UVA/Padova
+authors:
+  - name: "JetFoxy"
+    website: "https://github.com/JetFoxy"
+references:
+  - type: article
+    title: "The UVA/Padova Type 1 Diabetes Simulator Goes From Single Meal to Single Day"
+    authors:
+      - family-names: Visentin
+        given-names: Roberto
+      - family-names: Campos-Náñez
+        given-names: Enrique
+      - family-names: Schiavon
+        given-names: Michele
+      - family-names: Lv
+        given-names: Dayu
+      - family-names: Vettoretti
+        given-names: Martina
+      - family-names: Breton
+        given-names: Marc
+      - family-names: Kovatchev
+        given-names: Boris
+      - family-names: Dalla Man
+        given-names: Chiara
+      - family-names: Cobelli
+        given-names: Claudio
+    journal: "Journal of Diabetes Science and Technology"
+    year: 2018
+    volume: 12
+    issue: 2
+    start: 273
+    end: 281
+    doi: "10.1177/1932296818757747"
+  - type: article
+    title: "The UVA/PADOVA Type 1 Diabetes Simulator: New Features"
+    authors:
+      - family-names: Dalla Man
+        given-names: Chiara
+      - family-names: Micheletto
+        given-names: Francesco
+      - family-names: Lv
+        given-names: Dayu
+      - family-names: Breton
+        given-names: Marc
+      - family-names: Kovatchev
+        given-names: Boris
+      - family-names: Cobelli
+        given-names: Claudio
+    journal: "Journal of Diabetes Science and Technology"
+    year: 2014
+    volume: 8
+    issue: 1
+    start: 26
+    end: 34
+    doi: "10.1177/1932296813514502"
+  - type: article
+    title: "In Silico Preclinical Trials: A Proof of Concept in Closed-Loop Control of Type 1 Diabetes"
+    authors:
+      - family-names: Kovatchev
+        given-names: Boris
+      - family-names: Breton
+        given-names: Marc
+      - family-names: Dalla Man
+        given-names: Chiara
+      - family-names: Cobelli
+        given-names: Claudio
+    journal: "Journal of Diabetes Science and Technology"
+    year: 2009
+    volume: 3
+    issue: 1
+    start: 44
+    end: 55
+    doi: "10.1177/193229680900300106"
+  - type: article
+    title: "Circadian Variability of Insulin Sensitivity: Physiological Input for In Silico Artificial Pancreas"
+    authors:
+      - family-names: Visentin
+        given-names: Roberto
+      - family-names: Dalla Man
+        given-names: Chiara
+      - family-names: Kudva
+        given-names: Yogish
+      - family-names: Basu
+        given-names: Ananda
+      - family-names: Cobelli
+        given-names: Claudio
+    journal: "Diabetes Technology & Therapeutics"
+    year: 2015
+    volume: 17
+    issue: 1
+    start: 1
+    end: 7
+    doi: "10.1089/dia.2014.0192"
+  - type: article
+    title: "New model of glucose-insulin regulation characterizes effects of physical activity and facilitates personalized treatment evaluation in children and adults with type 1 diabetes"
+    authors:
+      - family-names: Deichmann
+        given-names: Julia
+      - family-names: Bachmann
+        given-names: Sara
+      - family-names: Burckhardt
+        given-names: Marie-Anne
+      - family-names: Pfister
+        given-names: Marc
+      - family-names: Szinnai
+        given-names: Gabor
+      - family-names: Kaltenbach
+        given-names: Hans-Michael
+    journal: "PLOS Computational Biology"
+    year: 2023
+    volume: 19
+    issue: 2
+    start: e1010289
+    doi: "10.1371/journal.pcbi.1010289"
