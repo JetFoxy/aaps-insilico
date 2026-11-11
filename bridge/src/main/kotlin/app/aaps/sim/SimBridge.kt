@@ -9,7 +9,9 @@ import app.aaps.core.interfaces.aps.IobTotal
 import app.aaps.core.interfaces.aps.MealData
 import app.aaps.core.interfaces.aps.OapsProfileAutoIsf
 import app.aaps.core.data.iob.InMemoryGlucoseValue
+import app.aaps.core.data.model.GV
 import app.aaps.core.data.model.SourceSensor
+import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.model.advancedFilteringSupported
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.aps.openAPSAutoISF.DetermineBasalAutoISF
@@ -342,6 +344,20 @@ class Bridge {
             )
         }?.toMutableList() ?: mutableListOf()
         pipeline.store.statusData = statusData
+        val readings = request.arr("readings")?.mapNotNull { element ->
+            val pair = element as? JsonArray ?: return@mapNotNull null
+            val ts = pair.getOrNull(0)?.jsonPrimitive?.long ?: return@mapNotNull null
+            val value = pair.getOrNull(1)?.jsonPrimitive?.double ?: return@mapNotNull null
+            GV(
+                timestamp = ts,
+                raw = value,
+                value = value,
+                trendArrow = TrendArrow.NONE,
+                noise = null,
+                sourceSensor = SourceSensor.fromString(request.str("sourceSensor") ?: "Libre2"),
+            )
+        }?.sortedByDescending { it.timestamp } ?: emptyList()
+        pipeline.store.bgReadings = readings
         val effective = simEffectiveProfile(
             basal = { basal.at(it) },
             currentBasal = request.num("currentBasal", basal.at(now)),

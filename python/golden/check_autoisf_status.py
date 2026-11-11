@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
+from cgm.validate_sensors import load_trace
 
 FIELDS = (
     "delta", "shortAvgDelta", "longAvgDelta", "duraISFminutes", "duraISFaverage",
@@ -51,6 +52,8 @@ def main() -> int:
     ap.add_argument("--pipeline", default="raw_S0")
     ap.add_argument("--limit", type=int, default=120)
     ap.add_argument("--tolerance", type=float, default=0.01)
+    ap.add_argument("--trace", help="trace CSV with raw readings (mmol/L) for the raw-fit path")
+    ap.add_argument("--column", default="raw")
     args = ap.parse_args()
 
     block = load_block(Path(args.csv).expanduser(), args.pipeline, args.limit)
@@ -58,6 +61,9 @@ def main() -> int:
         print(f"not enough contiguous rows for {args.pipeline}: {len(block)}")
         return 1
     readings = [[int(row["timestampMs"]), float(row["glucose"])] for row in block]
+    trace_ts, trace_values = (None, None)
+    if args.trace:
+        trace_ts, trace_values = load_trace(Path(args.trace).expanduser(), args.column)
     prefs = load_prefs(ROOT / "data/raw/settings.json")
     insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
 
@@ -74,8 +80,12 @@ def main() -> int:
                 {"ts": int(item["timestampMs"]), "glucose": float(item["glucose"]), "filledGap": False}
                 for item in block[: index + 1]
             ][::-1]
+            raw = None
+            if trace_ts is not None:
+                window = (trace_ts >= now - 6 * 60 * 60_000) & (trace_ts <= now)
+                raw = [[int(t), float(v)] for t, v in zip(trace_ts[window], trace_values[window])]
             response = bridge.request({
-                "cmd": "autoisfStatus", "now": now, "statusData": history,
+                "cmd": "autoisfStatus", "now": now, "statusData": history, "readings": raw,
                 "isf": 50.0, "carbRatio": 10.0, "target": 100.0, "currentBasal": 1.0,
             })
             status = response.get("status") or {}

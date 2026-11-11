@@ -21,7 +21,8 @@ algorithm variants under identical scenarios.
   bootstrap CI + Wilcoxon), A3 (CF from the model vs the 1700/TDI rule), A4 (fault catalogue),
   A5 (autoISF under faults), A6 (extended cohort, CGM noise, preference overrides), A7 (120
   subjects × 3 cohort seeds), A8 (sensor models vs real CGM traces, meal announcement errors),
-  A9 (cross-check against LoopInsighT1 / UVA-Padova T1DMS).
+  A9 (cross-check against LoopInsighT1 / UVA-Padova T1DMS), A10 (direction check against the
+  simglucose level-C run).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
