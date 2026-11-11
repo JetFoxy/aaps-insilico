@@ -3,53 +3,67 @@
 DynISF is the only target algorithm that is not runnable in the bench. This note is the concrete
 plan; it is not implemented yet.
 
-## What AAPS already gives us
+## Key fact: without TDD history DynISF starts from the profile ISF
 
-- `DetermineBasalSMB.determine_basal(..., dynIsfMode: Boolean, smb_ratio: Double)` — the real
-  decision function, with the dynamic-ISF branches inside.
-- `OpenAPSSMBPlugin.getIsfMgdl(profile: Profile, caller: String): Double?` — public; internally
-  calls the private `calculateVariableIsf` → `calculateRawDynIsf`, i.e. **the real DynISF formula**.
-- `calculateRawDynIsf` needs:
-  - `TddCalculator` (1 day, 7 days, last 24 h, last 4 h, 8–4 h),
-  - `ProfileUtil`, `Preferences` (`ApsDynIsf*`), `DateUtil`,
-  - a `ProfileSealed.EPS` profile (the method casts to it).
+`OpenAPSSMBPlugin.calculateRawDynIsf` only uses TDD to derive `baseSensitivity` when
+`dynisf_use_profile_sens = false`. With `dynisf_use_profile_sens = true` (the setting used by this
+project's reference configuration) the base sensitivity **is the profile ISF**, and the dynamic part
+is the glucose scaling:
+
+```
+divisor  = peak > 65 ? 55 : peak > 50 ? 65 : 75      // peak from iCfg (45 min -> 75)
+glucose  = bg > cap ? cap + (bg - cap) / 3 : bg       // cap = dynisf_bg_cap
+scaler   = ln(100 / divisor + 1) / ln(glucose / divisor + 1)
+ratio    = 1 - (1 - scaler) * velocity               // velocity = dynisf_velocity / 100
+sens     = profileISF * ratio
+```
+
+At `bg = 100` the ratio is 1, so `sens = profileISF`; above target the ISF falls (more aggressive),
+below target it rises. That is the "starting formula" the bench can run with **no TDD statistics at
+all**.
+
+The only catch is the gate `calculateVariableIsf` applies before calling the formula:
+
+```kotlin
+if (!dynIsfResult.tddPartsCalculated()) return Pair("TDD miss", null)
+```
+
+`tddPartsCalculated()` requires all five TDD windows to be non-null, but in profile-sens mode their
+values are never used. So a **stub** returning a constant (the profile TDI, or zeros) is enough.
 
 ## Design
 
-1. **Bridge command `dynisf`** (new), mirroring the existing `autoisf` command:
-   - build `ProfileSealed.EPS` from the effective profile (the bench already builds `EffectiveProfile`
-     for `autoisf`);
-   - instantiate `OpenAPSSMBPlugin` with the same proxy graph used by `AutoIsfRunner`, plus a real
-     `TddCalculator`, a real `DetermineBasalSMB` and the existing `GlucoseStatusCalculatorSMB`;
-   - `sens = plugin.getIsfMgdl(eps, "bench")`;
-   - `rt = determineBasalSMB.determine_basal(..., dynIsfMode = true, smb_ratio = ...)`.
-2. **TDD feed.** `SimTddCalculator` implements the five `TddCalculator` methods from the loop's dose
-   journal (basal + bolus per interval, carbs per interval). It returns `TDD(totalAmount, carbs,
-   allDaysHaveCarbs = true)`.
-3. **Loop.** `AlgorithmProfile.enable_dynisf`; the runner calls `dynisf` instead of `autoisf` and
-   passes the returned `sens` as `variable_sens` with `dynIsfMode = true`.
-4. **Warm-up.** `calculateVariableIsf` asks for whole days; a run that starts at 00:00 has no
-   1-day/7-day history at the first cycles. Options: (a) pre-seed the TDD calculator with the
-   subject's basal TDI for the first day, (b) start DynISF after 24 h of simulated history,
-   (c) allow `allowMissingDays = true`. This is a decision to make explicitly and document.
+1. **Bridge command `dynisf`** (new), mirroring `autoisf`:
+   - build a `ProfileSealed.EPS` around the simulated profile (the `getIsfMgdl` path casts to it);
+   - instantiate `OpenAPSSMBPlugin` with the same proxy graph as `AutoIsfRunner`, plus:
+     - `TddCalculator` stub returning `TDD(totalAmount = profileTDI)` for all five windows,
+     - a real `DetermineBasalSMB` (only `ProfileUtil` + `FabricPrivacy`),
+     - a real `GlucoseStatusCalculatorSMB` over the existing `iobCobCalculator`,
+     - `glucoseStatusProvider` returning the current status,
+     - `profileFunction.getProfile()` returning the same profile;
+   - `sens = plugin.getIsfMgdl(eps, "bench")`.
+2. **Bridge command `stepSmb`** (new): `DetermineBasalSMB.determine_basal(..., dynIsfMode = true,
+   smb_ratio = ...)` with `profile.variable_sens = sens`. This is a different decision function from
+   `DetermineBasalAutoISF`, so the loop needs an `algorithm` switch.
+3. **Loop.** `AlgorithmProfile.algorithm = "autoisf" | "dynisf"`; the DynISF arm calls `dynisf` +
+   `stepSmb`, the autoISF arm keeps `autoisf` + `step`.
+4. **Settings.** Use the reference configuration: `dynisf_use_profile_sens = true`,
+   `dynisf_velocity = 75`, `dynisf_bg_cap = 252`, `use_dynamic_sensitivity = true`.
 
 ## Risks
 
-- `getIsfMgdl` casts the profile to `ProfileSealed.EPS`; the bridge must supply that wrapper, not a
-  bare `EffectiveProfile`.
+- `getIsfMgdl` casts the profile to `ProfileSealed.EPS`; the bridge must wrap the simulated profile.
 - `OpenAPSSMBPlugin` has ~25 constructor dependencies; the proxy graph must answer the ones used on
-  the ISF path (`profileUtil`, `dateUtil`, `preferences`, `tddCalculator`, `profiler`). This is the
-  bulk of the work and the main source of debugging.
-- `DetermineBasalSMB` is large; the bridge needs its `OapsProfile` fields (`TDD`, `insulinDivisor`,
-  `use_TDD_for_predictions`) set from preferences, not from a hand-written formula.
-- **No golden data.** Acceptance must be structural: determinism, finite outputs, monotone response
-  of `variable_sens` to TDD, and no change when `dynIsfMode = false`. Parity with the app is not
-  available without a recorded DynISF run.
+  the ISF path (`profileFunction`, `glucoseStatusProvider`, `profileUtil`, `dateUtil`,
+  `preferences`, `persistenceLayer`). This is the bulk of the work.
+- `DetermineBasalSMB` is large and expects an `OapsProfile` with `TDD`, `insulinDivisor` and
+  `use_TDD_for_predictions`; these must be set from preferences, not hand-written.
+- **No golden data.** Acceptance is structural, not parity.
 
 ## Acceptance (proposed)
 
-1. `dynisf` returns a finite `sens` for every subject and is deterministic by seed.
-2. Raising the simulated TDD lowers `variable_sens` (higher ISF) monotonically over a sweep.
-3. With `dynIsfMode = false` the command returns the profile ISF unchanged.
-4. A 24 h FCL run with DynISF produces a trace with no NaN, no negative rates and a dose in the
-   TDI range; compared side by side with autoISF off/on as a third arm.
+1. `dynisf` returns a finite `sens` for every subject, deterministic by seed.
+2. At `bg = target` the returned `sens` equals the profile ISF (ratio = 1).
+3. Higher BG lowers `sens` monotonically; the response saturates at `dynisf_bg_cap`.
+4. A 24 h FCL run with the DynISF arm has no NaN, no negative rates and a dose in the TDI range;
+   compared side by side with autoISF off/on as a third arm.
