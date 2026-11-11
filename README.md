@@ -23,7 +23,7 @@ algorithm variants under identical scenarios.
   subjects × 3 cohort seeds), A8 (sensor models vs real CGM traces, meal announcement errors),
   A9 (cross-check against LoopInsighT1 / UVA-Padova T1DMS), A10 (direction check against the
   simglucose level-C run), A11 (robustness to the CGM noise shape), A12 (MetaboNet as a fourth
-  real-CGM source).
+  real-CGM source), A13 (first off / autoISF / DynISF comparison).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
