@@ -112,6 +112,22 @@ references:
     end: 7
     doi: "10.1089/dia.2014.0192"
   - type: article
+    title: "MetaboNet: The Largest Publicly Available Consolidated Data Set for Type 1 Diabetes Management"
+    authors:
+      - family-names: Wolff
+        given-names: Miriam K.
+      - family-names: Calhoun
+        given-names: Peter
+      - family-names: Aiello
+        given-names: Eleonora Maria
+      - family-names: Qin
+        given-names: Yao
+      - family-names: Royston
+        given-names: Sam F.
+    journal: "Journal of Diabetes Science and Technology"
+    year: 2026
+    doi: "10.1177/19322968261441637"
+  - type: article
     title: "New model of glucose-insulin regulation characterizes effects of physical activity and facilitates personalized treatment evaluation in children and adults with type 1 diabetes"
     authors:
       - family-names: Deichmann
