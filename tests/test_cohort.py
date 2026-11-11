@@ -45,3 +45,16 @@ def test_pref_overrides_coerce_types() -> None:
     assert prefs["smbinterval"] == 4
     assert prefs["a"] == 1
     assert _coerce("true") is True
+
+
+def test_load_residuals_from_csv_and_npy(tmp_path) -> None:
+    from runner.options import RESIDUALS, load_residuals
+
+    csv_path = tmp_path / "resid.csv"
+    csv_path.write_text("1.0\n-2.0\n3.0\n")
+    assert list(load_residuals(str(csv_path))) == [1.0, -2.0, 3.0]
+
+    npy_path = tmp_path / "resid.npy"
+    np.save(npy_path, np.array([4.0, 5.0]))
+    assert list(load_residuals(str(npy_path))) == [4.0, 5.0]
+    assert load_residuals(None) is RESIDUALS

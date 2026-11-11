@@ -20,7 +20,7 @@ from pump.pump import PumpConfig
 from runner.a2_matrix import paired_stats
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
-from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, noise_kwargs
+from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
 from simcore.population import compute_cf, compute_cr, compute_tdi
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
@@ -61,10 +61,11 @@ def run_task(task: dict) -> dict:
     spec = FAULTS[fault]
     profile = profile_for(subject, auto_isf)
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
+    residuals = load_residuals(task.get("residuals_path"))
     with Bridge() as bridge:
         init_bridge(bridge, subject, task["prefs"], INSULIN, profile, spec["scenario"])
         loop = run_closed_loop(
-            subject, bridge, profile, spec["scenario"], seed=seed, residuals=RESIDUALS,
+            subject, bridge, profile, spec["scenario"], seed=seed, residuals=residuals,
             pump_config=spec["pump"], **task["noise"],
         )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
@@ -86,7 +87,8 @@ def main() -> int:
     noise = noise_kwargs(args)
     arms = (False, True) if args.compare else (False,)
     tasks = [
-        {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "prefs": prefs, "noise": noise}
+        {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "prefs": prefs,
+         "noise": noise, "residuals_path": args.noise_file}
         for fault in FAULTS for name in names for auto_isf in arms
     ]
     started = time.time()

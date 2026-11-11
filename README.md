@@ -87,6 +87,7 @@ and `server/live.py`:
 | `--cohort-copies N` | add N absorption-perturbed copies per base subject (30 → 30·(1+N)) |
 | `--cohort-seed` | deterministic perturbation seed |
 | `--noise residuals\|ar1\|white\|none\|facchinetti\|dexcom` | CGM noise/sensor model |
+| `--noise-file PATH` | CSV/NPY residuals to replay instead of the shipped fixture |
 | `--noise-scale` | amplitude multiplier (e.g. 1.5 for a noisier sensor) |
 | `--noise-sigma`, `--noise-ar1` | AR(1)/white parameters, mg/dL and lag-1 correlation |
 | `--pref KEY=VALUE` | override any AAPS preference (autoISF weights, SMB limits, ...) |

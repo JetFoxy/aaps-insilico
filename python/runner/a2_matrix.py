@@ -20,7 +20,7 @@ from bridge.client import Bridge, insulin_from_settings, load_prefs
 from exercise.model import ExerciseSession
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
-from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, noise_kwargs
+from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
 from simcore.params import load_subject
 from simcore.variability import si_day
 from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
@@ -107,11 +107,12 @@ def run_task(task: dict) -> dict:
             scenario, si_multipliers=si_day(seed).multipliers, dawn_egp=1.5,
         )
     profile = profile_for(subject, auto_isf, spec["profile_scale"], isf_source)
+    residuals = load_residuals(task.get("residuals_path"))
     with Bridge() as bridge:
         init_bridge(bridge, subject, task["prefs"], INSULIN, profile, scenario)
         loop = run_closed_loop(
             subject, bridge, profile, scenario,
-            seed=seed, residuals=RESIDUALS, temp_mode=temp_mode,
+            seed=seed, residuals=residuals, temp_mode=temp_mode,
             **task["noise"],
         )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
@@ -180,6 +181,7 @@ def main() -> int:
             "subject": cohort[name], "scenario": scenario, "auto_isf": auto_isf,
             "temp_mode": args.temp_mode, "variability": args.variability,
             "isf_source": args.isf_source, "prefs": prefs, "noise": noise,
+            "residuals_path": args.noise_file,
         }
         for scenario in scenarios for name in names for auto_isf in (False, True)
     ]

@@ -55,6 +55,8 @@ def add_options(parser: argparse.ArgumentParser) -> None:
                         help="sigma for ar1/white noise, mg/dL")
     parser.add_argument("--noise-ar1", type=float, default=float(env("SIM_NOISE_AR1", 0.8)),
                         help="lag-1 correlation for ar1 noise")
+    parser.add_argument("--noise-file", default=env("SIM_NOISE_FILE"),
+                        help="CSV/NPY with residuals to replay instead of the shipped fixture")
     parser.add_argument("--pref", action="append", default=env_prefs(), metavar="KEY=VALUE",
                         help="override an AAPS preference for every run (repeatable; SIM_PREFS, SIM_PREFS_FILE)")
 
@@ -62,6 +64,15 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 def load_cohort(copies: int, seed: int) -> dict[str, Subject]:
     base = load_subjects()
     return extend_cohort(base, copies, seed) if copies > 0 else base
+
+
+def load_residuals(path: str | None) -> np.ndarray:
+    if not path:
+        return RESIDUALS
+    file = Path(path).expanduser()
+    if file.suffix == ".npy":
+        return np.load(file)
+    return np.loadtxt(file, dtype=float).ravel()
 
 
 def noise_kwargs(args: argparse.Namespace) -> dict:
