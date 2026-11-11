@@ -22,7 +22,7 @@ algorithm variants under identical scenarios.
   A5 (autoISF under faults), A6 (extended cohort, CGM noise, preference overrides), A7 (120
   subjects × 3 cohort seeds), A8 (sensor models vs real CGM traces, meal announcement errors),
   A9 (cross-check against LoopInsighT1 / UVA-Padova T1DMS), A10 (direction check against the
-  simglucose level-C run).
+  simglucose level-C run), A11 (robustness to the CGM noise shape).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
