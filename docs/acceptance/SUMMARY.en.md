@@ -87,6 +87,22 @@ wrong.
 - **Docker:** runtime image (851 MB) with the flattened bridge classpath; built from the host's
   pinned AAPS worktree.
 
+### A7 — extended cohort, three seeds (120 subjects, 1440 runs)
+
+With 30 base subjects plus 3 absorption-perturbed copies each, and three independent cohort seeds:
+
+| Metric (FCL 24 h) | seed 20261111 | seed 7 | seed 42 | mean |
+|---|---|---|---|---|
+| ΔTIR | −0.009 (p=0.044) | −0.008 (p=0.051) | −0.009 (p=0.015) | −0.0087 |
+| ΔTBR<70 | +0.010 | +0.011 | +0.011 | +0.0107 |
+| ΔSMB | −13.2 | −13.6 | −13.4 | −13.4 |
+| Δdose, U | +0.62 | +0.62 | +0.65 | +0.63 |
+| Δinsulin while falling | +0.065 | +0.066 | +0.065 | +0.065 |
+
+Exercise: ΔTIR −0.002 pp (p = 0.014–0.19), ΔTBR +0.0034, ΔSMB −4.3, Δdose +0.55 U. The effect is
+stable across seeds (spread ≤ 0.1 pp) and matches A2's 30-subject result to within 0.1 pp / 0.1 U;
+at n = 120 the FCL TIR loss becomes statistically significant.
+
 ## Reproducibility
 
 - Seeds: cohort perturbation (`--cohort-seed`), CGM noise (`crc32(subject)`), bootstrap (fixed).
