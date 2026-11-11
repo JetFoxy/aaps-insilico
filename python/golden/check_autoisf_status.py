@@ -70,9 +70,12 @@ def main() -> int:
         for index in range(12, len(block)):
             row = block[index]
             now = int(row["timestampMs"])
-            history = readings[: index + 1]
+            history = [
+                {"ts": int(item["timestampMs"]), "glucose": float(item["glucose"]), "filledGap": False}
+                for item in block[: index + 1]
+            ][::-1]
             response = bridge.request({
-                "cmd": "autoisf", "now": now, "readings": history, "sourceSensor": "Libre2",
+                "cmd": "autoisfStatus", "now": now, "statusData": history,
                 "isf": 50.0, "carbRatio": 10.0, "target": 100.0, "currentBasal": 1.0,
             })
             status = response.get("status") or {}

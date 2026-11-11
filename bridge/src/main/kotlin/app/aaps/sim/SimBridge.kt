@@ -8,6 +8,7 @@ import app.aaps.core.interfaces.aps.GlucoseStatusAutoIsf
 import app.aaps.core.interfaces.aps.IobTotal
 import app.aaps.core.interfaces.aps.MealData
 import app.aaps.core.interfaces.aps.OapsProfileAutoIsf
+import app.aaps.core.data.iob.InMemoryGlucoseValue
 import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.advancedFilteringSupported
 import app.aaps.core.keys.interfaces.Preferences
@@ -64,6 +65,7 @@ class Bridge {
             "glucose" -> glucose(request)
             "iob" -> iob(request)
             "autoisf" -> autoisf(request)
+            "autoisfStatus" -> autoisfStatus(request)
             "meal" -> meal(request)
             "step" -> step(request)
             "ukfReset" -> {
@@ -319,6 +321,38 @@ class Bridge {
         }
         val sens = autoIsf.autoIsf(now, effective, tempTarget)
         val status = pipeline.calculator.getGlucoseStatusData(allowOldData = false)
+        return buildJsonObject {
+            put("sens", sens)
+            put("status", status?.toJson() ?: JsonNull)
+            put("console", buildJsonArray { autoIsf.console().forEach { add(JsonPrimitive(it)) } })
+        }
+    }
+
+    private fun autoisfStatus(request: JsonObject): JsonObject {
+        val now = request.long("now")
+        val statusData = request.arr("statusData")?.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val value = obj.num("glucose")
+            InMemoryGlucoseValue(
+                timestamp = obj.long("ts"),
+                value = value,
+                smoothed = obj["smoothed"]?.jsonPrimitive?.doubleOrNull ?: value,
+                calibrated = obj["calibrated"]?.jsonPrimitive?.doubleOrNull,
+                filledGap = obj.bool("filledGap", false),
+            )
+        }?.toMutableList() ?: mutableListOf()
+        pipeline.store.statusData = statusData
+        val effective = simEffectiveProfile(
+            basal = { basal.at(it) },
+            currentBasal = request.num("currentBasal", basal.at(now)),
+            iCfg = iCfg,
+            isfMgdl = request.num("isf", 0.0),
+            carbRatio = request.num("carbRatio", 1.0),
+            targetLow = request.num("targetLow", request.num("target", 100.0)),
+            targetHigh = request.num("targetHigh", request.num("target", 100.0)),
+        )
+        val sens = autoIsf.autoIsf(now, effective, null)
+        val status = pipeline.calculator.getGlucoseStatusData(allowOldData = true)
         return buildJsonObject {
             put("sens", sens)
             put("status", status?.toJson() ?: JsonNull)
