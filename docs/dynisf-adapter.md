@@ -91,8 +91,18 @@ The ISF half is implemented and validated:
 - One real bug found and fixed on the way: `profileUtilProxy` did not implement
   `convertToMgdlDetect`, so `dynisf_bg_cap` became 0 and the cap folded BG 100 into 33.3.
 
-Remaining: `stepSmb` (an `OapsProfile` mapper plus `DetermineBasalSMB.determine_basal` with
-`dynIsfMode = true`) and the `algorithm = "dynisf"` arm in the loop.
+`stepSmb` and the loop arm are implemented too:
+
+- `SimBridge.toOapsProfileSmb()` maps the request profile to `OapsProfile` (including `variable_sens`,
+  `insulinDivisor`, `TDD`, `use_TDD_for_predictions`).
+- `stepSmb` calls `DetermineBasalSMB.determine_basal(..., dynIsfMode = true)` and returns the RT.
+- `AlgorithmProfile.algorithm = "dynisf"` + `tdd`; the loop calls `dynisf` for `variable_sens` and
+  `stepSmb` for the decision. A 2 h FCL run works: 24 cycles, ISF 23.4–30 (profile 30), dose 6.75 U,
+  `runningDynamicIsf = true` in the RT.
+- Tests: `tests/test_dynisf.py` (ISF at target, monotone fall, loop arm).
+
+Remaining: a DynISF vs autoISF vs off matrix on the 30-subject cohort, and wiring the `dynisf` arm
+into `a2_matrix.py` / the live UI.
 
 ## Acceptance (proposed)
 

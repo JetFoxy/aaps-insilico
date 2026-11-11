@@ -35,3 +35,29 @@ def test_dynisf_returns_profile_isf_at_target() -> None:
         high = _sens(bridge, now, 200.0)
         assert high < 50.0
         assert _sens(bridge, now, 250.0) < high
+
+
+def test_dynisf_loop_arm_runs() -> None:
+    import numpy as np
+
+    from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+    from simcore.params import load_subject
+    from simcore.population import compute_cr, compute_tdi
+
+    subject = load_subject("adult#001")
+    cr = compute_cr(subject) or 10.5
+    tdi = compute_tdi(subject, cr) or 40.0
+    prefs = load_prefs(ROOT / "data/raw/settings.json")
+    insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
+    profile = AlgorithmProfile(
+        sens=30.0, carb_ratio=cr, target_bg=110.0,
+        current_basal=subject.basal_u_per_min * 60, algorithm="dynisf", tdd=tdi,
+    )
+    scenario = Scenario(duration_min=120, meals=[(60.0, 30.0)], meal_mode="fcl")
+    residuals = np.load(ROOT / "tests/fixtures/cgm_residuals.npy")
+    with Bridge() as bridge:
+        init_bridge(bridge, subject, prefs, insulin, profile, scenario)
+        loop = run_closed_loop(subject, bridge, profile, scenario, seed=1, residuals=residuals)
+    assert len(loop.cgm) == 24
+    assert all(value > 0 for value in loop.variable_sens)
+    assert min(loop.variable_sens) < 30.0

@@ -7,6 +7,7 @@ import app.aaps.core.interfaces.aps.CurrentTemp
 import app.aaps.core.interfaces.aps.GlucoseStatusAutoIsf
 import app.aaps.core.interfaces.aps.IobTotal
 import app.aaps.core.interfaces.aps.MealData
+import app.aaps.core.interfaces.aps.OapsProfile
 import app.aaps.core.interfaces.aps.OapsProfileAutoIsf
 import app.aaps.core.data.iob.InMemoryGlucoseValue
 import app.aaps.core.data.model.EPS
@@ -73,6 +74,7 @@ class Bridge {
             "autoisf" -> autoisf(request)
             "autoisfStatus" -> autoisfStatus(request)
             "dynisf" -> dynisf(request)
+            "stepSmb" -> stepSmb(request)
             "meal" -> meal(request)
             "step" -> step(request)
             "ukfReset" -> {
@@ -422,6 +424,71 @@ class Bridge {
             put("profile_target", JsonPrimitive(eps.getTargetMgdl()))
             put("status_glucose", runner.lastStatusGlucose?.let { JsonPrimitive(it) } ?: JsonNull)
         }
+    }
+
+    private fun JsonObject.toOapsProfileSmb(): OapsProfile = OapsProfile(
+        dia = d("dia", 8.0),
+        min_5m_carbimpact = d("min_5m_carbimpact", 8.0),
+        max_iob = d("max_iob", 12.0),
+        max_daily_basal = d("max_daily_basal", d("current_basal", 1.0) * 3),
+        max_basal = d("max_basal", 4.0),
+        min_bg = d("min_bg", 100.0),
+        max_bg = d("max_bg", 100.0),
+        target_bg = d("target_bg", 100.0),
+        carb_ratio = d("carb_ratio", 10.0),
+        sens = d("sens", 100.0),
+        autosens_adjust_targets = b("autosens_adjust_targets", false),
+        max_daily_safety_multiplier = d("max_daily_safety_multiplier", 3.0),
+        current_basal_safety_multiplier = d("current_basal_safety_multiplier", 4.0),
+        high_temptarget_raises_sensitivity = b("high_temptarget_raises_sensitivity", false),
+        low_temptarget_lowers_sensitivity = b("low_temptarget_lowers_sensitivity", false),
+        sensitivity_raises_target = b("sensitivity_raises_target", false),
+        resistance_lowers_target = b("resistance_lowers_target", false),
+        adv_target_adjustments = b("adv_target_adjustments", false),
+        exercise_mode = b("exercise_mode", false),
+        half_basal_exercise_target = i("half_basal_exercise_target", 160),
+        maxCOB = i("maxCOB", 120),
+        skip_neutral_temps = b("skip_neutral_temps", false),
+        remainingCarbsCap = i("remainingCarbsCap", 90),
+        enableUAM = b("enableUAM", true),
+        A52_risk_enable = b("A52_risk_enable", false),
+        SMBInterval = i("SMBInterval", 3),
+        enableSMB_with_COB = b("enableSMB_with_COB", true),
+        enableSMB_with_temptarget = b("enableSMB_with_temptarget", true),
+        allowSMB_with_high_temptarget = b("allowSMB_with_high_temptarget", true),
+        enableSMB_always = b("enableSMB_always", true),
+        enableSMB_after_carbs = b("enableSMB_after_carbs", true),
+        maxSMBBasalMinutes = i("maxSMBBasalMinutes", 80),
+        maxUAMSMBBasalMinutes = i("maxUAMSMBBasalMinutes", 75),
+        bolus_increment = d("bolus_increment", 0.05),
+        carbsReqThreshold = i("carbsReqThreshold", 5),
+        current_basal = d("current_basal", 1.0),
+        temptargetSet = b("temptargetSet", false),
+        autosens_max = d("autosens_max", 1.2),
+        out_units = str("out_units") ?: "mg/dl",
+        lgsThreshold = null,
+        variable_sens = d("variable_sens", d("sens", 100.0)),
+        insulinDivisor = i("insulinDivisor", 75),
+        TDD = d("TDD", 40.0),
+        use_TDD_for_predictions = b("use_TDD_for_predictions", true),
+    )
+
+    private fun stepSmb(request: JsonObject): JsonObject {
+        val input = request.obj("input") ?: error("input is required")
+        val runner = DynIsfRunner(preferences, dateUtil, clock, logger, pipeline, input.num("TDD", 40.0))
+        val rt = runner.determine(
+            glucoseStatus = input.obj("glucoseStatus")!!.toGlucoseStatus(),
+            currentTemp = input.obj("currentTemp")!!.toCurrentTemp(),
+            iob = input.arr("iob")!!.map { it.jsonObject.toIobTotal() }.toTypedArray(),
+            profile = input.obj("profile")!!.toOapsProfileSmb(),
+            autosens = input.obj("autosens")?.toAutosens() ?: AutosensResult(),
+            meal = input.obj("meal")?.toMealData() ?: MealData(),
+            microBolusAllowed = input.bool("microBolusAllowed"),
+            now = input.long("now"),
+            flatBGs = input.bool("flatBGs"),
+            smbRatio = input.num("smbRatio", 0.5),
+        )
+        return buildJsonObject { put("rt", json.parseToJsonElement(rt.serialize())) }
     }
 
     private fun step(request: JsonObject): JsonObject {

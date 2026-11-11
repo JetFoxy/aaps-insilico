@@ -4,6 +4,13 @@ import androidx.collection.LongSparseArray
 import app.aaps.core.data.aps.AverageTDD
 import app.aaps.core.data.model.TDD
 import app.aaps.core.interfaces.aps.APSResult
+import app.aaps.core.interfaces.aps.AutosensResult
+import app.aaps.core.interfaces.aps.CurrentTemp
+import app.aaps.core.interfaces.aps.GlucoseStatus
+import app.aaps.core.interfaces.aps.IobTotal
+import app.aaps.core.interfaces.aps.MealData
+import app.aaps.core.interfaces.aps.OapsProfile
+import app.aaps.core.interfaces.aps.RT
 import app.aaps.core.interfaces.constraints.Constraint
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.db.PersistenceLayer
@@ -109,6 +116,8 @@ class DynIsfRunner(
         DeltaCalculator(logger),
     )
 
+    private val smbDetermineBasal = DetermineBasalSMB(profileUtilProxy(), anyProxy(FabricPrivacy::class.java) as FabricPrivacy)
+
     private val plugin: OpenAPSSMBPlugin = OpenAPSSMBPlugin(
         aapsLogger = logger,
         rxBus = anyProxy(app.aaps.core.interfaces.rx.bus.RxBus::class.java) as app.aaps.core.interfaces.rx.bus.RxBus,
@@ -129,13 +138,43 @@ class DynIsfRunner(
         bgQualityCheck = anyProxy(app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck::class.java) as app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck,
         notificationManager = anyProxy(app.aaps.core.interfaces.notifications.NotificationManager::class.java) as app.aaps.core.interfaces.notifications.NotificationManager,
         dynamicCarbRatioCalculator = DynamicCarbRatioCalculator(),
-        determineBasalSMB = DetermineBasalSMB(profileUtilProxy(), anyProxy(FabricPrivacy::class.java) as FabricPrivacy),
+        determineBasalSMB = smbDetermineBasal,
         profiler = anyProxy(app.aaps.core.interfaces.profiling.Profiler::class.java) as app.aaps.core.interfaces.profiling.Profiler,
         glucoseStatusCalculatorSMB = smbCalculator,
         apsResultProvider = { anyProxy(APSResult::class.java) as APSResult },
         ch = anyProxy(app.aaps.core.interfaces.insulin.ConcentrationHelper::class.java) as app.aaps.core.interfaces.insulin.ConcentrationHelper,
         fabricPrivacy = anyProxy(FabricPrivacy::class.java) as FabricPrivacy,
     )
+
+    fun determine(
+        glucoseStatus: GlucoseStatus,
+        currentTemp: CurrentTemp,
+        iob: Array<IobTotal>,
+        profile: OapsProfile,
+        autosens: AutosensResult,
+        meal: MealData,
+        microBolusAllowed: Boolean,
+        now: Long,
+        flatBGs: Boolean,
+        smbRatio: Double,
+    ): RT {
+        clock.now = now
+        return runBlocking {
+            smbDetermineBasal.determine_basal(
+                glucose_status = glucoseStatus,
+                currenttemp = currentTemp,
+                iob_data_array = iob,
+                profile = profile,
+                autosens_data = autosens,
+                meal_data = meal,
+                microBolusAllowed = microBolusAllowed,
+                currentTime = now,
+                flatBGsDetected = flatBGs,
+                dynIsfMode = true,
+                smb_ratio = smbRatio,
+            )
+        }
+    }
 
     fun sens(now: Long, profile: ProfileSealed.EPS): Double? {
         clock.now = now

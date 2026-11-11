@@ -29,6 +29,8 @@ class AlgorithmProfile:
     bolus_increment: float = 0.05
     enable_auto_isf: bool = False
     smb_ratio_3min: float = 0.3
+    algorithm: str = "autoisf"
+    tdd: float = 40.0
 
 
 @dataclass
@@ -237,7 +239,19 @@ def run_closed_loop(
             })["iob"]
             iob_now = float(iob[0]["iob"])
 
-            if profile.enable_auto_isf:
+            if profile.algorithm == "dynisf":
+                auto = bridge.request({
+                    "cmd": "dynisf", "now": now_ms,
+                    "readings": cgm_history, "sourceSensor": "Libre2",
+                    "isf": profile.sens, "carbRatio": profile.carb_ratio,
+                    "target": profile.target_bg, "targetLow": profile.target_bg,
+                    "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
+                    "tdd": profile.tdd,
+                })
+                candidate = auto.get("sens")
+                if candidate is not None and math.isfinite(candidate) and candidate > 0:
+                    variable_sens = float(candidate)
+            elif profile.enable_auto_isf:
                 auto = bridge.request({
                     "cmd": "autoisf", "now": now_ms,
                     "readings": cgm_history, "sourceSensor": "Libre2",
@@ -268,8 +282,10 @@ def run_closed_loop(
                 }
             cob_now = float(meal_json["mealCOB"])
 
-            rt = bridge.request({"cmd": "step", "input": {
+            step_cmd = "stepSmb" if profile.algorithm == "dynisf" else "step"
+            rt = bridge.request({"cmd": step_cmd, "input": {
                 "now": now_ms,
+                "TDD": profile.tdd,
                 "glucoseStatus": glucose,
                 "currentTemp": current_temp,
                 "iob": iob,
@@ -284,6 +300,8 @@ def run_closed_loop(
                     "bolus_increment": profile.bolus_increment,
                     "enable_autoISF": profile.enable_auto_isf,
                     "out_units": "mg/dl", "temptargetSet": False,
+                    "TDD": profile.tdd, "insulinDivisor": 75,
+                    "use_TDD_for_predictions": True,
                 },
                 "microBolusAllowed": micro_bolus_allowed,
                 "flatBGs": False,
