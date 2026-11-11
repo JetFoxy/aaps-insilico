@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>aaps-insilico — closed-loop demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>aaps-insilico</h1>
+    <span class="subtitle" data-i18n="subtitle"></span>
+  </div>
+  <div class="header-right">
+    <span class="badge" data-i18n="badge"></span>
+    <select id="lang" class="lang" aria-label="Language">
+      <option value="ru">RU</option>
+      <option value="en">EN</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <section class="controls">
+    <label><span data-i18n="ctl.subject"></span> <select id="subject"></select></label>
+    <label><span data-i18n="ctl.scenario"></span> <select id="scenario"></select></label>
+    <div class="arms" id="arms">
+      <button data-arm="off" class="arm" data-i18n="ctl.arm.off"></button>
+      <button data-arm="on" class="arm" data-i18n="ctl.arm.on"></button>
+    </div>
+    <label class="cmp"><input type="checkbox" id="compare"> <span data-i18n="ctl.compare"></span></label>
+    <div class="spacer"></div>
+    <button id="live" class="live" data-i18n="ctl.live"></button>
+  </section>
+
+  <section class="controls playback">
+    <button id="play" class="play">▶</button>
+    <input id="scrub" type="range" min="0" max="0" value="0" step="1">
+    <span id="clock" class="clock">00:00</span>
+    <select id="speed" class="speed">
+      <option value="1">1×</option>
+      <option value="2">2×</option>
+      <option value="4" selected>4×</option>
+      <option value="8">8×</option>
+    </select>
+  </section>
+
+  <details class="params" id="params">
+    <summary><span data-i18n="params.summary"></span> <span class="hint" data-i18n="params.hint"></span></summary>
+    <div class="param-grid">
+      <label><span data-i18n="params.copies"></span><input id="p-copies" type="number" min="0" max="5" value="0"></label>
+      <label><span data-i18n="params.seed"></span><input id="p-seed" type="number" value="20261111"></label>
+      <label><span data-i18n="params.noise"></span><select id="p-noise">
+        <option value="residuals" data-i18n="noise.residuals"></option>
+        <option value="ar1" data-i18n="noise.ar1"></option>
+        <option value="white" data-i18n="noise.white"></option>
+        <option value="none" data-i18n="noise.none"></option>
+      </select></label>
+      <label><span data-i18n="params.scale"></span><input id="p-noise-scale" type="number" step="0.1" min="0" value="1"></label>
+      <label><span data-i18n="params.sigma"></span><input id="p-noise-sigma" type="number" step="0.1" min="0" value="2.49"></label>
+      <label><span data-i18n="params.ar1"></span><input id="p-noise-ar1" type="number" step="0.05" min="0" max="0.99" value="0.8"></label>
+      <label><span data-i18n="params.isf"></span><select id="p-isf">
+        <option value="rule" data-i18n="isf.rule"></option>
+        <option value="model" data-i18n="isf.model"></option>
+      </select></label>
+      <label><span data-i18n="params.temp"></span><select id="p-temp">
+        <option value="planned" data-i18n="temp.planned"></option>
+        <option value="cycle" data-i18n="temp.cycle"></option>
+      </select></label>
+      <label><span data-i18n="params.smb"></span><input id="p-smb" type="number" step="0.05" min="0.05" max="1" value="0.3"></label>
+      <label class="chk"><input id="p-var" type="checkbox"> <span data-i18n="params.var"></span></label>
+    </div>
+    <div class="param-grid weights">
+      <label>bgAccel<input id="p-w-accel" type="number" step="0.01" value="0.36"></label>
+      <label>bgBrake<input id="p-w-brake" type="number" step="0.01" value="0.37"></label>
+      <label>lower<input id="p-w-lower" type="number" step="0.01" value="0.27"></label>
+      <label>higher<input id="p-w-higher" type="number" step="0.01" value="0.76"></label>
+      <label>pp<input id="p-w-pp" type="number" step="0.01" value="0"></label>
+      <label>dura<input id="p-w-dura" type="number" step="0.01" value="0.15"></label>
+      <label>autoISF min<input id="p-isf-min" type="number" step="0.05" value="0.7"></label>
+      <label>autoISF max<input id="p-isf-max" type="number" step="0.05" value="1.3"></label>
+    </div>
+  </details>
+
+  <section class="cards" id="cards"></section>
+  <div class="delta-caption hidden" id="delta-caption" data-i18n="delta.caption"></div>
+  <section class="cards deltas" id="deltas"></section>
+
+  <section class="chart-wrap">
+    <div class="legend">
+      <span><i class="dot cgm"></i><span data-i18n="legend.cgm"></span></span>
+      <span><i class="dot plasma"></i><span data-i18n="legend.plasma"></span></span>
+      <span><i class="dot smb"></i><span data-i18n="legend.smb"></span></span>
+      <span><i class="tri"></i><span data-i18n="legend.meal"></span></span>
+      <span><i class="band"></i><span data-i18n="legend.band"></span></span>
+      <span id="cmp-legend" class="hidden"><i class="dash"></i><span data-i18n="legend.other"></span></span>
+    </div>
+    <canvas id="glucose"></canvas>
+    <div id="tooltip" class="tooltip hidden"></div>
+  </section>
+  <section class="chart-wrap">
+    <canvas id="insulin"></canvas>
+  </section>
+  <section class="reason">
+    <span class="label" data-i18n="reason.label"></span>
+    <p id="reason-text">—</p>
+    <p id="autoisf" class="autoisf">—</p>
+  </section>
+</main>
+
+<footer>
+  <span id="meta"></span>
+  <span><span data-i18n="footer.generated"></span>: <code>python/runner/export_demo.py</code></span>
+</footer>
+
+<script src="data/runs.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

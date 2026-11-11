@@ -1,0 +1,11 @@
+.venv
+out
+data/raw
+data/golden
+.git
+**/__pycache__
+.pytest_cache
+.ruff_cache
+*.jar
+build/*
+!build/docker-lib

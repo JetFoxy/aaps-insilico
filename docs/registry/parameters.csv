@@ -1,0 +1,77 @@
+symbol,meaning,unit,value,source,status
+BW,body_weight,kg,"adults 75.2 (12.1) 52.6-108.4; adolescents 50.8 (8.8) 30.4-80.3; children 30.7 (5.3) 18.3-49.8",S2017 Table 1,published
+TDI_per_kg,total_daily_insulin_per_kg,U/kg/day,"adults 0.56 (0.16) 0.32-1.15; adolescents 0.68 (0.22) 0.30-1.32; children 0.56 (0.16) 0.34-1.18",S2017 Table 1,published
+CR_B,carb_ratio_breakfast,g/U,"adults 16.9 (7.9) 6.0-40.0; adolescents 14.5 (7.1) 4.0-32.0; children 21.8 (8.7) 9.0-45.0",S2017 Table 1,published
+CR_L,carb_ratio_lunch,g/U,"adults 19.7 (8.2) 4.0-38.0; adolescents 17.0 (7.0) 6.0-33.0; children 25.1 (8.5) 7.0-45.0",S2017 Table 1,published
+CR_D,carb_ratio_dinner,g/U,"adults 20.6 (9.1) 5.0-40.0; adolescents 17.8 (7.4) 5.0-35.0; children 26.4 (10.2) 6.0-51.0",S2017 Table 1,published
+Gf,fasting_plasma_glucose,mg/dL,"adults 119.1 (7.1) 102.1-134.5; adolescents 120.8 (6.6) 106.4-140.5; children 119.6 (6.0) 106.0-133.6",S2017 Table 1,published
+Gth,hypoglycemia_threshold,mg/dL,60,S2013 section Glucose utilization in hypoglycemia,published
+dawn_dG,dawn_glucose_rise_3_to_7,mg/dL,30,S2017 section Dawn (Mallad et al.),published
+dawn_EGP,dawn_EGP_rise,mg/kg/min,1.5,S2017 section Dawn (Mallad et al.),published
+CF_rule,correction_factor_rule,unitless,CF = 1700 / TDI,S2013 section Determination of CR and CF,published
+CF_model,correction_factor_from_model,mg/dL per U,"median 26.6, range 7.9-183.6 (1 U bolus at steady state, adaptive probe)","definition of CF applied to the S2017 core; not a literature value (A3)",derived
+TDI_diet_adult,carbohydrate_intake_for_TDI_adults, g/day,180,S2013 section Determination of CR and CF,published
+TDI_diet_child,carbohydrate_intake_for_TDI_children,g/day,135,S2013 section Determination of CR and CF,published
+insulin_effect,insulin_effect_on_glucose_utilization,1e-2 mg/kg/min per pmol/L,"adults 3.82 (1.34); adolescents 3.06 (1.67); children 12.58 (5.64)",S2008 Table 1,published
+Vmx,insulin_dependent_glucose_utilization,mg/kg/min,,S2017 Appendix A10,todo
+Vm0,basal_glucose_utilization,mg/kg/min,,S2017 Appendix A10,todo
+Km0,Michaelis_constant,mg/kg,,S2017 Appendix A10,todo
+p2U,insulin_action_rate,1/min,,S2017 Appendix A10,todo
+r1,hypoglycemia_risk_gain,unitless,,S2013 section Glucose utilization in hypoglycemia,todo
+r2,hypoglycemia_risk_exponent,unitless,,S2013 section Glucose utilization in hypoglycemia,todo
+kp1,EGP_at_zero_glucose_and_insulin,mg/kg/min,,S2017 Appendix A5,todo
+kp2,EGP_glucose_suppression,1/min,,S2017 Appendix A5,todo
+kp3,EGP_insulin_suppression,unitless,,S2017 Appendix A5,todo
+ki,insulin_signal_rate,1/min,,S2017 Appendix A5,todo
+k1,glucose_transport_plasma_to_tissue,1/min,,S2017 Appendix G-1,todo
+k2,glucose_transport_tissue_to_plasma,1/min,,S2017 Appendix G-2,todo
+m1,insulin_transport_liver_to_plasma,1/min,,S2017 Appendix I-1,todo
+m2,insulin_transport_plasma_to_liver,1/min,,S2017 Appendix I-2,todo
+m3,insulin_degradation_liver,1/min,,S2017 Appendix I-2,todo
+m4,insulin_degradation_plasma,1/min,,S2017 Appendix I-1,todo
+VG,glucose_distribution_volume,dl/kg,,S2017 Appendix G-3,todo
+VI,insulin_distribution_volume,dl/kg,,S2017 Appendix I-3,todo
+Fcns,insulin_independent_utilization,mg/kg/min,,S2017 Appendix,todo
+ke1,renal_excretion_rate,1/min,,S2017 Appendix,todo
+ke2,renal_threshold,mg/kg,,S2017 Appendix,todo
+kabs,intestinal_absorption_rate,1/min,,S2017 Appendix R-4,todo
+kmax,stomach_max_emptying,1/min,,S2017 Appendix R-2,todo
+kmin,stomach_min_emptying,1/min,,S2017 Appendix,todo
+alpha,gastric_emptying_alpha,unitless,,S2017 Appendix,todo
+beta,gastric_emptying_beta,unitless,,S2017 Appendix,todo
+b_gastric,gastric_emptying_b,unitless,,S2017 Appendix,todo
+c_gastric,gastric_emptying_c,unitless,,S2017 Appendix,todo
+f_bioavailability,carbohydrate_bioavailability,unitless,,S2017 Appendix,todo
+ka1,subcutaneous_insulin_absorption_fast,1/min,,S2017 Appendix A16,todo
+ka2,subcutaneous_insulin_absorption_slow,1/min,,S2017 Appendix A16,todo
+kd,subcutaneous_insulin_dissociation,1/min,,S2017 Appendix A17,todo
+tau,subcutaneous_insulin_delay,min,,S2017 Appendix A17 (ref 32),todo
+Ts,subcutaneous_glucose_time_constant,min,,S2017 Appendix,todo
+xi,liver_glucagon_responsivity,mg/kg/min per pg/mL,,S2017 Appendix A5,todo
+kH,glucagon_action_rate,1/min,,S2017 Appendix,todo
+n,glucagon_clearance,1/min,,S2017 Appendix A24,todo
+rho,static_glucagon_secretion_rate,1/min,,S2017 Appendix A25,todo
+sigma,alpha_cell_glucose_responsivity,unitless,,S2017 Appendix A25,todo
+delta_glucagon,alpha_cell_rate_responsivity,unitless,,S2017 Appendix,todo
+kh1,subcutaneous_glucagon_rate_1,1/min,,S2017 Appendix,todo
+kh2,subcutaneous_glucagon_rate_2,1/min,,S2017 Appendix,todo
+kh3,subcutaneous_glucagon_rate_3,1/min,,S2017 Appendix,todo
+Gb,basal_glucose,mg/dL,,S2017 Table 1 population only (fasting BG),todo
+Gpb,basal_glucose_plasma_amount,mg/kg,,S2017 Appendix,todo
+Gtb,basal_glucose_tissue_amount,mg/kg,,S2017 Appendix,todo
+Ipb,basal_insulin_plasma,pmol/L,,S2017 Appendix,todo
+Ilb,basal_insulin_liver,pmol/L,,S2017 Appendix,todo
+Hb,basal_glucagon,pg/mL,,S2017 Appendix,todo
+SI_class_probabilities,probabilities_of_7_diurnal_SI_classes,unitless,0.1/0.05/0.05/0.1/0.2/0.2/0.3,Visentin 2015 Results (PMC4290795),published
+SI_low_over_high,low_SI_relative_to_high,unitless,0.4,Visentin 2015 Results (PMC4290795),published
+SI_transitions,SI_profile_transition_times,clock,4:00 / 11:00 / 17:00,Visentin 2015 Methods (PMC4290795),published
+kir_profile,dawn_insulin_resistance_profile,unitless,,S2017 section Dawn (ref 29),todo
+exercise_si_gain,instantaneous_SI_multiplier_during_exercise,unitless,3.29,Schiavon 2013 (PMC3876324),published
+exercise_recovery,linear_recovery_after_exercise,min,165,Schiavon 2013 (PMC3876324),published
+exercise_average_si,average_SI_multiplier_over_protocol,unitless,2.0,Schiavon 2013 (PMC3876324),published
+exercise_ka_target,plasma_insulin_increase_during_exercise,fraction,0.30,PBPK via plan section 1 (PMC8237803),published
+exercise_ka_multiplier,ka_multiplier_calibrated_to_target,unitless,1.388,calibrated in this repo (target from PBPK),derived
+cgm_noise_ar2,CGM_AR2_noise_parameters,unitless,,S2017 CGM model (ref 37),todo
+cgm_calibration,CGM_calibration_error_polynomial,unitless,,S2017 CGM model (ref 37),todo
+smbg_error,SMBG_error_distribution_parameters,unitless,,S2017 SMBG model (refs 35-36),todo
+insulin_analog_pk,fast_acting_analog_PK_per_analog,unitless,,S2017 SC insulin (ref 32),todo

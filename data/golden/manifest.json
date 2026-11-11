@@ -1,0 +1,37 @@
+{
+  "schema": "golden/v1",
+  "source": "site1",
+  "counts": {
+    "devicestatus_records": 26897,
+    "cycles": 11780,
+    "cycles_enacted": 3533,
+    "cycles_cob_zero": 4752,
+    "cgm": 21096,
+    "treatments": 6361,
+    "profiles": 678
+  },
+  "algorithms": {
+    "AUTO_ISF|autoisf=True|dynisf=False": 11398,
+    "SMB|autoisf=False|dynisf=True": 382
+  },
+  "span": [
+    "2026-10-01T00:00:44Z",
+    "2026-10-28T23:57:04Z"
+  ],
+  "files_sha256_12": {
+    "cycles.jsonl": "024c1e04c40f07822053eecbb22cfd1e8552b7ede1deabb81860",
+    "cgm.jsonl": "edc5f779f458367e1d470b707fdf70d45a7569c85ff032c05430",
+    "treatments.jsonl": "1aa954ce0cd268da78ab98520ac06abae157102dfd5525c03d54",
+    "profiles.jsonl": "e1d31b7046ab470b9dd98c648905c38c4a53027fad89d85fb9b1"
+  },
+  "redacted": [
+    "device",
+    "uploader",
+    "subject",
+    "identifier",
+    "_id",
+    "notes",
+    "location",
+    "profile names"
+  ]
+}

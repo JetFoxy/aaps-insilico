@@ -1,0 +1,10 @@
+data/raw/
+data/golden/*.jsonl
+.venv/
+__pycache__/
+*.pyc
+out/
+.pytest_cache/
+.ruff_cache/
+*.jar
+build/

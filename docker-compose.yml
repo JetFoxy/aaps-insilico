@@ -1,0 +1,6 @@
+services:
+  bench:
+    image: aaps-insilico:local
+    ports:
+      - "8766:8766"
+    restart: unless-stopped
