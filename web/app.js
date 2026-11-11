@@ -363,6 +363,7 @@
     el("scrub").disabled = true;
     el("compare").disabled = true;
     state.live = true;
+    el("param-note").textContent = "";
     const body = {
       subject: el("subject").value,
       scenario: el("scenario").value,
@@ -581,6 +582,12 @@
       document.querySelectorAll(".arm").forEach((b) => b.classList.toggle("active", b.dataset.arm === run.arm));
     }
   }
+
+  document.querySelectorAll("#params input, #params select").forEach((node) => {
+    node.addEventListener("change", () => {
+      if (!state.live) el("param-note").textContent = t("params.note");
+    });
+  });
 
   el("p-copies").addEventListener("change", () => {
     if (!state.hasServer) return;

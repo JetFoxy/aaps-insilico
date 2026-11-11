@@ -158,6 +158,12 @@ button:hover { border-color: rgba(255, 255, 255, 0.24); }
 
 .params .hint { color: var(--muted); font-size: 11px; }
 
+.param-note {
+  color: var(--rate);
+  font-size: 11px;
+  margin-left: 8px;
+}
+
 .param-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
