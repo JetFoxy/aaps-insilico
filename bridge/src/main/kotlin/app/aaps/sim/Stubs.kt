@@ -237,6 +237,7 @@ fun profileUtilProxy(): app.aaps.core.interfaces.profile.ProfileUtil =
             "fromMmolToUnits" -> ((args?.getOrNull(0) as? Double) ?: 0.0) * 18.0
             "valueInCurrentUnitsDetect" -> (args?.getOrNull(0) as? Double) ?: 0.0
             "fromMgdlToStringInUnits" -> (args?.getOrNull(0) as? Double)?.let { String.format(Locale.US, "%.0f", it) } ?: ""
+            "convertToMgdlDetect", "convertToMgdl" -> (args?.getOrNull(0) as? Number)?.toDouble() ?: 0.0
             "fromMgdlToStringWithUnits" -> (args?.getOrNull(0) as? Double)?.let { String.format(Locale.US, "%.0f mg/dl", it) } ?: ""
             "fromMgdlToRoundString", "fromMgdlToRoundedString" ->
                 (args?.getOrNull(0) as? Double)?.let { String.format(Locale.US, "%.0f", it) } ?: ""

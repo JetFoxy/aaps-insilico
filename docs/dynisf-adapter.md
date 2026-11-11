@@ -77,6 +77,23 @@ values are never used. So a **stub** returning a constant (the profile TDI, or z
   `use_TDD_for_predictions`; these must be set from preferences, not hand-written.
 - **No golden data.** Acceptance is structural, not parity.
 
+## Status (2026-11-11)
+
+The ISF half is implemented and validated:
+
+- `DynIsfRunner.kt` instantiates the real `OpenAPSSMBPlugin` with a proxy graph, a constant
+  `TddCalculator` (profile TDI) and the real `DetermineBasalSMB` / `GlucoseStatusCalculatorSMB`.
+- Bridge command `dynisf` builds a single-block `ProfileSealed.EPS` from the request and returns
+  `getIsfMgdl(eps, "bench")`.
+- Measured with `isf = 50`, target 100, velocity 75, cap 252: BG 100 → 50.0, BG 150 → 41.42,
+  BG 200 → 36.95, BG 250 → 34.17. At target the ISF equals the profile ISF (ratio 1), and it falls
+  monotonically with BG, as the formula requires.
+- One real bug found and fixed on the way: `profileUtilProxy` did not implement
+  `convertToMgdlDetect`, so `dynisf_bg_cap` became 0 and the cap folded BG 100 into 33.3.
+
+Remaining: `stepSmb` (an `OapsProfile` mapper plus `DetermineBasalSMB.determine_basal` with
+`dynIsfMode = true`) and the `algorithm = "dynisf"` arm in the loop.
+
 ## Acceptance (proposed)
 
 1. `dynisf` returns a finite `sens` for every subject, deterministic by seed.

@@ -9,6 +9,10 @@ import app.aaps.core.interfaces.aps.IobTotal
 import app.aaps.core.interfaces.aps.MealData
 import app.aaps.core.interfaces.aps.OapsProfileAutoIsf
 import app.aaps.core.data.iob.InMemoryGlucoseValue
+import app.aaps.core.data.model.EPS
+import app.aaps.core.data.model.GlucoseUnit
+import app.aaps.core.data.model.data.Block
+import app.aaps.core.data.model.data.TargetBlock
 import app.aaps.core.data.model.GV
 import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TrendArrow
@@ -68,6 +72,7 @@ class Bridge {
             "iob" -> iob(request)
             "autoisf" -> autoisf(request)
             "autoisfStatus" -> autoisfStatus(request)
+            "dynisf" -> dynisf(request)
             "meal" -> meal(request)
             "step" -> step(request)
             "ukfReset" -> {
@@ -373,6 +378,49 @@ class Bridge {
             put("sens", sens)
             put("status", status?.toJson() ?: JsonNull)
             put("console", buildJsonArray { autoIsf.console().forEach { add(JsonPrimitive(it)) } })
+        }
+    }
+
+    private fun dynisf(request: JsonObject): JsonObject {
+        val now = request.long("now")
+        val readings = request.arr("readings")?.mapNotNull { element ->
+            val pair = element as? JsonArray ?: return@mapNotNull null
+            val ts = pair.getOrNull(0)?.jsonPrimitive?.long ?: return@mapNotNull null
+            val value = pair.getOrNull(1)?.jsonPrimitive?.double ?: return@mapNotNull null
+            ts to value
+        } ?: emptyList()
+        val source = SourceSensor.fromString(request.str("sourceSensor") ?: "Libre2")
+        pipeline.glucose(now, readings, source)
+        val dayMs = 24L * 60 * 60 * 1000
+        val currentBasal = request.num("currentBasal", basal.at(now))
+        val isf = request.num("isf", 0.0)
+        val carbRatio = request.num("carbRatio", 1.0)
+        val target = request.num("target", 100.0)
+        val eps = app.aaps.core.objects.profile.ProfileSealed.EPS(
+            EPS(
+                timestamp = now,
+                basalBlocks = listOf(Block(duration = dayMs, amount = currentBasal)),
+                isfBlocks = listOf(Block(duration = dayMs, amount = isf)),
+                icBlocks = listOf(Block(duration = dayMs, amount = carbRatio)),
+                targetBlocks = listOf(TargetBlock(duration = dayMs, lowTarget = target, highTarget = target)),
+                glucoseUnit = GlucoseUnit.MGDL,
+                originalProfileName = "sim",
+                originalCustomizedName = "sim",
+                originalTimeshift = 0,
+                originalPercentage = 100,
+                originalDuration = 0,
+                originalEnd = 0,
+                iCfg = iCfg,
+            ),
+            null,
+        )
+        val runner = DynIsfRunner(preferences, dateUtil, clock, logger, pipeline, request.num("tdd", 40.0))
+        val sens = runner.sens(now, eps)
+        return buildJsonObject {
+            put("sens", sens?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("profile_isf", JsonPrimitive(eps.getProfileIsfMgdl()))
+            put("profile_target", JsonPrimitive(eps.getTargetMgdl()))
+            put("status_glucose", runner.lastStatusGlucose?.let { JsonPrimitive(it) } ?: JsonNull)
         }
     }
 
