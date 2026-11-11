@@ -120,6 +120,8 @@ class Bridge {
         basal = BasalTimeline(basalRows)
 
         pipeline = GlucosePipeline(preferences, dateUtil, clock, logger)
+        dynIsfRunner = null
+        dynIsfTdd = Double.NaN
         autoIsf = AutoIsfRunner(preferences, dateUtil, clock, logger, pipeline)
         determineBasal.preferences = preferences
         iobCalculator = SimIobCobCalculator(
@@ -383,6 +385,18 @@ class Bridge {
         }
     }
 
+    private var dynIsfRunner: DynIsfRunner? = null
+    private var dynIsfTdd: Double = Double.NaN
+
+    private fun dynRunner(tdd: Double): DynIsfRunner {
+        val current = dynIsfRunner
+        if (current == null || dynIsfTdd != tdd) {
+            dynIsfRunner = DynIsfRunner(preferences, dateUtil, clock, logger, pipeline, tdd)
+            dynIsfTdd = tdd
+        }
+        return dynIsfRunner!!
+    }
+
     private fun dynisf(request: JsonObject): JsonObject {
         val now = request.long("now")
         val readings = request.arr("readings")?.mapNotNull { element ->
@@ -416,7 +430,7 @@ class Bridge {
             ),
             null,
         )
-        val runner = DynIsfRunner(preferences, dateUtil, clock, logger, pipeline, request.num("tdd", 40.0))
+        val runner = dynRunner(request.num("tdd", 40.0))
         val sens = runner.sens(now, eps)
         return buildJsonObject {
             put("sens", sens?.let { JsonPrimitive(it) } ?: JsonNull)
@@ -475,7 +489,7 @@ class Bridge {
 
     private fun stepSmb(request: JsonObject): JsonObject {
         val input = request.obj("input") ?: error("input is required")
-        val runner = DynIsfRunner(preferences, dateUtil, clock, logger, pipeline, input.num("TDD", 40.0))
+        val runner = dynRunner(input.num("TDD", 40.0))
         val rt = runner.determine(
             glucoseStatus = input.obj("glucoseStatus")!!.toGlucoseStatus(),
             currentTemp = input.obj("currentTemp")!!.toCurrentTemp(),
