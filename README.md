@@ -26,7 +26,7 @@ algorithm variants under identical scenarios.
   real-CGM source), A13 (first off / autoISF / DynISF comparison), A14 (full 30-subject
   off/autoISF/DynISF matrix), A15 (DynISF on the 120-subject cohort), A16 (DynISF under M3
   variability and on the model CF profile), A17 (DynISF under faults), A18 (DynISF on the
-  120-subject cohort with M3 variability).
+  120-subject cohort with M3 variability), A19 (DynISF on the model CF profile, 120 subjects).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 
