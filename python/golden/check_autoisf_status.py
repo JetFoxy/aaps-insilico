@@ -81,13 +81,14 @@ def main() -> int:
             history = []
             for item in block[: index + 1]:
                 ts = int(item["timestampMs"])
-                smoothed = float(item["glucose"])
-                raw = smoothed
-                if trace_ts is not None:
+                smoothed = float(item.get("smoothed") or item["glucose"])
+                raw = float(item.get("value") or smoothed)
+                gap = str(item.get("filledGap", "false")).lower() == "true"
+                if trace_ts is not None and "value" not in item:
                     near = int(np.argmin(np.abs(trace_ts - ts)))
                     if abs(int(trace_ts[near]) - ts) <= 60_000:
                         raw = float(trace_values[near])
-                history.append({"ts": ts, "value": raw, "smoothed": smoothed, "filledGap": False})
+                history.append({"ts": ts, "value": raw, "smoothed": smoothed, "filledGap": gap})
             history = history[::-1]
             raw = None
             if trace_ts is not None:
