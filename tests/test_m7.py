@@ -9,8 +9,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from bridge.client import Bridge, insulin_from_settings, load_prefs
-from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+from bridge.client import Bridge, BridgeError, insulin_from_settings, load_prefs
+from runner.closed_loop import EPOCH0_MS, AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from simcore.params import load_subject
 
@@ -28,17 +28,124 @@ def _profile(subject) -> AlgorithmProfile:
     )
 
 
-def _run(subject, scenario, seed=1, pump_config=None, on_cycle=None):
+def _run(subject, scenario, seed=1, pump_config=None, on_cycle=None, bridge_factory=Bridge):
     prefs = load_prefs(ROOT / "data/raw/settings.json")
     insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
     profile = _profile(subject)
     residuals = np.load(ROOT / "tests/fixtures/cgm_residuals.npy")
-    with Bridge() as bridge:
+    with bridge_factory() as bridge:
         init_bridge(bridge, subject, prefs, insulin, profile, scenario)
         return run_closed_loop(
             subject, bridge, profile, scenario, seed=seed, residuals=residuals,
             pump_config=pump_config, on_cycle=on_cycle,
         )
+
+
+def test_batch_loop_uses_one_cycle_request_per_cycle() -> None:
+    requests = []
+
+    class CountingBridge(Bridge):
+        def request(self, payload):
+            requests.append(payload["cmd"])
+            return super().request(payload)
+
+    subject = load_subject("adult#001")
+    scenario = Scenario(duration_min=30, meals=[(15.0, 30.0)])
+    _run(subject, scenario, bridge_factory=CountingBridge)
+    assert requests == ["init"] + ["cycle"] * 6
+
+
+def test_reused_bridge_does_not_leak_loop_state() -> None:
+    subject = load_subject("adult#001")
+    scenario = Scenario(duration_min=30, meals=[(15.0, 30.0)])
+    prefs = load_prefs(ROOT / "data/raw/settings.json")
+    insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
+    profile = AlgorithmProfile(
+        sens=50.0, carb_ratio=10.5, target_bg=110.0,
+        current_basal=subject.basal_u_per_min * 60, enable_auto_isf=True,
+    )
+    residuals = np.load(ROOT / "tests/fixtures/cgm_residuals.npy")
+    def fresh():
+        with Bridge() as bridge:
+            init_bridge(bridge, subject, prefs, insulin, profile, scenario)
+            return run_closed_loop(
+                subject, bridge, profile, scenario, seed=7, residuals=residuals,
+            )
+
+    first = fresh()
+    second = fresh()
+    with Bridge() as bridge:
+        shared = []
+        for _ in range(2):
+            init_bridge(bridge, subject, prefs, insulin, profile, scenario)
+            shared.append(run_closed_loop(
+                subject, bridge, profile, scenario, seed=7, residuals=residuals,
+            ))
+
+    assert shared[0].cgm == first.cgm
+    assert shared[0].rate == first.rate
+    assert shared[1].cgm == second.cgm
+    assert shared[1].rate == second.rate
+
+
+def test_cycle_rejects_unknown_algorithm_before_stateful_calls() -> None:
+    subject = load_subject("adult#001")
+    prefs = load_prefs(ROOT / "data/raw/settings.json")
+    insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
+    profile = _profile(subject)
+    scenario = Scenario(duration_min=5)
+    now = EPOCH0_MS + 5 * 60_000
+    current_temp = {"duration": 0, "rate": profile.current_basal, "minutesrunning": 0}
+
+    def cycle_payload(algorithm: str) -> dict:
+        return {
+            "cmd": "cycle", "now": now,
+            "readings": [[now - 10 * 60_000, 95.0], [now - 5 * 60_000, 100.0], [now, 105.0]],
+            "sourceSensor": "Libre2", "autosens": 1.0,
+            "exerciseMode": False, "halfBasalExerciseTarget": 160,
+            "isTempTarget": False, "treatments": [], "mealMode": scenario.meal_mode,
+            "isf": profile.sens, "carbRatio": profile.carb_ratio,
+            "target": profile.target_bg, "targetLow": profile.target_bg,
+            "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
+            "tdd": profile.tdd, "algorithm": algorithm,
+            "input": {
+                "now": now, "TDD": profile.tdd, "currentTemp": current_temp,
+                "autosens": {"ratio": 1.0},
+                "profile": {
+                    "sens": profile.sens, "variable_sens": profile.sens,
+                    "carb_ratio": profile.carb_ratio, "target_bg": profile.target_bg,
+                    "min_bg": profile.target_bg, "max_bg": profile.target_bg,
+                    "current_basal": profile.current_basal, "max_iob": profile.max_iob,
+                    "max_basal": profile.max_basal, "SMBInterval": profile.smb_interval,
+                    "bolus_increment": profile.bolus_increment,
+                    "enable_autoISF": True, "out_units": "mg/dl",
+                    "temptargetSet": False, "TDD": profile.tdd,
+                    "insulinDivisor": 75, "use_TDD_for_predictions": True,
+                },
+                "microBolusAllowed": True, "flatBGs": False, "autoIsfMode": True,
+                "loopWantedSmb": "AAPS", "smbRatio": 0.5,
+                "smbMaxRangeExtension": 1.0, "iobThresholdPercent": 100,
+                "profilePercentage": 100, "activityConsoleLog": "",
+            },
+        }
+
+    def normalized_cycle(bridge: Bridge) -> dict:
+        response = bridge.request(cycle_payload("autoisf"))
+        response["glucose"].pop("debug", None)
+        return response
+
+    with Bridge() as bridge:
+        init_bridge(bridge, subject, prefs, insulin, profile, scenario)
+        invalid = cycle_payload("not-supported")
+        with pytest.raises(BridgeError, match="unknown algorithm"):
+            bridge.request(invalid)
+        actual = normalized_cycle(bridge)
+
+    with Bridge() as bridge:
+        init_bridge(bridge, subject, prefs, insulin, profile, scenario)
+        expected = normalized_cycle(bridge)
+
+    assert actual == expected
 
 
 def test_metrics_on_synthetic_series() -> None:

@@ -42,6 +42,18 @@ SCENARIO_LABELS = {
     "cgm-bias": "смещение CGM +50",
 }
 NOISE_CHOICES = ("residuals", "ar1", "white", "none")
+UI_PREF_KEYS = (
+    "bgAccel_ISF_weight",
+    "bgBrake_ISF_weight",
+    "lower_ISFrange_weight",
+    "higher_ISFrange_weight",
+    "pp_ISF_weight",
+    "dura_ISF_weight",
+    "autoISF_min",
+    "autoISF_max",
+    "dynisf_velocity",
+    "dynisf_bg_cap",
+)
 
 STREAMS: dict[str, "queue.Queue[dict]"] = {}
 DEFAULTS: dict = {}
@@ -166,8 +178,12 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({
                 "base_subjects": [name for name, _ in sorted(load_subjects().items())],
                 "scenarios": [{"id": key, "label": label} for key, label in SCENARIO_LABELS.items()],
-                "arms": ["off", "on"],
+                "arms": ["off", "on", "dynisf"],
                 "defaults": DEFAULTS,
+                "prefs": {
+                    key: DEFAULT_PREFS.get(key, BASE_PREFS.get(key))
+                    for key in UI_PREF_KEYS
+                },
             })
             return
         if self.path.startswith("/api/stream"):

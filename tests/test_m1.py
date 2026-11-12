@@ -47,6 +47,12 @@ def test_states_nonnegative() -> None:
     assert trace.x.min() >= -1e-8, f"negative state {trace.x.min():.3e}"
 
 
+def test_simulate_rejects_unknown_integrator() -> None:
+    subject = load_subject("adult#001")
+    with pytest.raises(ValueError, match="unknown integration method"):
+        simulate(subject, Schedule(basal_u_per_min=subject.basal_u_per_min), 5.0, method="RK45")
+
+
 def test_60g_response_adults() -> None:
     peaks_glucose = []
     peaks_insulin = []

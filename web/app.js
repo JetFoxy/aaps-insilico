@@ -20,9 +20,60 @@
   const state = {
     run: null, upto: 1, playing: false, speed: 4, hover: null, lastTs: 0, acc: 0,
     compare: false, live: false, source: null, hasServer: false,
+    paramDefaults: null, activeParams: null,
   };
 
   let baseSubjects = [...new Set(runs.map((r) => r.subject))];
+  const FALLBACK_DEFAULTS = {
+    cohort_copies: 0, cohort_seed: 20261111, noise: "residuals", noise_scale: 1,
+    noise_sigma: 2.49, noise_ar1: 0.8, isf_source: "rule", temp_mode: "planned",
+    variability: false, smb_ratio_3min: 0.3,
+  };
+  const FALLBACK_PREFS = {
+    bgAccel_ISF_weight: 0.36, bgBrake_ISF_weight: 0.37, lower_ISFrange_weight: 0.27,
+    higher_ISFrange_weight: 0.76, pp_ISF_weight: 0, dura_ISF_weight: 0.15,
+    autoISF_min: 0.7, autoISF_max: 1.3,
+    dynisf_velocity: 75, dynisf_bg_cap: 252,
+  };
+  const PARAM_SLIDERS = {
+    cohort_copies: { id: "p-copies", min: 0, max: 5, step: 1 },
+    noise_scale: { id: "p-noise-scale", min: 0, max: 5, step: 0.1 },
+    noise_sigma: { id: "p-noise-sigma", min: 0, max: 50, step: 0.1 },
+    noise_ar1: { id: "p-noise-ar1", min: 0, max: 0.99, step: 0.01 },
+    smb_ratio_3min: { id: "p-smb", min: 0.05, max: 1, step: 0.05 },
+    bgAccel_ISF_weight: { id: "p-w-accel", min: 0, max: 1, step: 0.01 },
+    bgBrake_ISF_weight: { id: "p-w-brake", min: 0, max: 1, step: 0.01 },
+    lower_ISFrange_weight: { id: "p-w-lower", min: 0, max: 1, step: 0.01 },
+    higher_ISFrange_weight: { id: "p-w-higher", min: 0, max: 1, step: 0.01 },
+    pp_ISF_weight: { id: "p-w-pp", min: 0, max: 1, step: 0.01 },
+    dura_ISF_weight: { id: "p-w-dura", min: 0, max: 1, step: 0.01 },
+    autoISF_min: { id: "p-isf-min", min: 0.3, max: 1.5, step: 0.05 },
+    autoISF_max: { id: "p-isf-max", min: 1, max: 3, step: 0.05 },
+    dynisf_velocity: { id: "p-dynisf-velocity", min: 0, max: 100, step: 5 },
+    dynisf_bg_cap: { id: "p-dynisf-cap", min: 100, max: 400, step: 2 },
+  };
+  const PARAM_LABEL_KEYS = {
+    cohort_copies: "params.copies", cohort_seed: "params.seed", noise: "params.noise",
+    noise_scale: "params.scale", noise_sigma: "params.sigma", noise_ar1: "params.ar1",
+    isf_source: "params.isf", temp_mode: "params.temp", variability: "params.var",
+    smb_ratio_3min: "params.smb", bgAccel_ISF_weight: "params.weight.accel",
+    bgBrake_ISF_weight: "params.weight.brake", lower_ISFrange_weight: "params.weight.lower",
+    higher_ISFrange_weight: "params.weight.higher", pp_ISF_weight: "params.weight.pp",
+    dura_ISF_weight: "params.weight.dura", autoISF_min: "params.limit.min",
+    autoISF_max: "params.limit.max", dynisf_velocity: "params.dynisf.velocity",
+    dynisf_bg_cap: "params.dynisf.cap",
+  };
+  const PRIMARY_PARAMS = [
+    "cohort_copies", "noise", "noise_scale", "isf_source", "temp_mode",
+    "smb_ratio_3min", "variability",
+  ];
+  const PARAM_SCOPES = {
+    bgAccel_ISF_weight: "autoisf", bgBrake_ISF_weight: "autoisf",
+    lower_ISFrange_weight: "autoisf", higher_ISFrange_weight: "autoisf",
+    pp_ISF_weight: "autoisf", dura_ISF_weight: "autoisf",
+    autoISF_min: "autoisf", autoISF_max: "autoisf",
+    dynisf_velocity: "dynisf", dynisf_bg_cap: "dynisf",
+  };
   const scenarios = (subject) => [...new Set(runs.filter((r) => r.subject === subject).map((r) => r.scenario))];
   const arms = (subject, scenario) => runs
     .filter((r) => r.subject === subject && r.scenario === scenario)
@@ -300,6 +351,8 @@
     el("play").disabled = false;
     el("scrub").disabled = false;
     el("compare").disabled = false;
+    state.activeParams = null;
+    renderParamState();
   }
 
   function handleFrame(frame) {
@@ -313,6 +366,8 @@
       state.upto = 0;
       el("scrub").max = "0";
       const p = frame.params || {};
+      state.activeParams = flattenParams(p);
+      renderParamState(p);
       el("meta").textContent =
         `live · ${frame.subject} · ${frame.scenario} · ${frame.arm} · ` +
         `шум ${p.noise}×${p.noise_scale} · когорта ×${p.cohort_copies} · ISF ${p.isf_source} · темпы ${p.temp_mode}`;
@@ -364,6 +419,7 @@
     el("compare").disabled = true;
     state.live = true;
     el("param-note").textContent = "";
+    renderParamState();
     const body = {
       subject: el("subject").value,
       scenario: el("scenario").value,
@@ -546,11 +602,129 @@
         dura_ISF_weight: num("p-w-dura"),
         autoISF_min: num("p-isf-min"),
         autoISF_max: num("p-isf-max"),
+        dynisf_velocity: num("p-dynisf-velocity"),
+        dynisf_bg_cap: num("p-dynisf-cap"),
       },
     };
   }
 
-  function applyDefaults(defaults) {
+  function flattenParams(params) {
+    const values = params || paramsFromUI();
+    return { ...values, ...values.prefs };
+  }
+
+  function setParamDefaults(defaults, prefs) {
+    state.paramDefaults = { ...FALLBACK_DEFAULTS, ...defaults, ...FALLBACK_PREFS, ...prefs };
+  }
+
+  function sameValue(left, right) {
+    if (typeof left === "boolean" || typeof right === "boolean") {
+      return Boolean(left) === Boolean(right);
+    }
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+      return Math.abs(leftNumber - rightNumber) < 1e-9;
+    }
+    return String(left) === String(right);
+  }
+
+  function changedParams(baseline) {
+    const current = flattenParams();
+    return Object.keys(PARAM_LABEL_KEYS).filter((name) => {
+      const expected = baseline ? baseline[name] : state.paramDefaults?.[name];
+      return expected !== undefined && !sameValue(current[name], expected);
+    });
+  }
+
+  function activeAlgorithmScope() {
+    const arm = currentArm();
+    return arm === "dynisf" ? "dynisf" : arm === "on" ? "autoisf" : "off";
+  }
+
+  function formatParam(name, value) {
+    if (name === "noise") return t(`noise.${value}`);
+    if (name === "isf_source") return t(`isf.${value}`);
+    if (name === "temp_mode") return t(`temp.${value}`);
+    if (typeof value === "boolean") return value ? "on" : "off";
+    const number = Number(value);
+    return Number.isFinite(number) ? Number(number.toFixed(2)).toString() : String(value);
+  }
+
+  function installParamSliders() {
+    Object.entries(PARAM_SLIDERS).forEach(([name, config]) => {
+      const label = document.querySelector(`[data-param="${name}"]`);
+      const number = el(config.id);
+      if (!label || !number || number.dataset.sliderBound === "true") return;
+      number.dataset.sliderBound = "true";
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = String(config.min);
+      slider.max = String(config.max);
+      slider.step = String(config.step);
+      slider.value = number.value;
+      slider.setAttribute("aria-label", t(PARAM_LABEL_KEYS[name]));
+      slider.addEventListener("input", () => {
+        number.value = slider.value;
+        number.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      number.addEventListener("input", () => { slider.value = number.value; });
+      label.appendChild(slider);
+    });
+  }
+
+  function renderParamState(activeParams) {
+    if (!state.paramDefaults) return;
+    const mode = activeAlgorithmScope();
+    const supported = (name) => !PARAM_SCOPES[name] || PARAM_SCOPES[name] === mode;
+    const changedDefault = changedParams().filter(supported);
+    const changedActive = activeParams
+      ? changedParams(flattenParams(activeParams)).filter(supported)
+      : [];
+    document.querySelectorAll("[data-scope]").forEach((section) => {
+      section.hidden = section.dataset.scope !== mode;
+    });
+    const baseline = activeParams || state.activeParams;
+    const status = state.live
+      ? (changedActive.length ? "pending" : "live")
+      : (changedDefault.length ? "pending" : "ready");
+    const statusNode = el("param-status");
+    statusNode.className = `status ${status}`;
+    statusNode.textContent = t(`params.status.${status}`);
+
+    const summary = changedDefault.length ? `${changedDefault.length} Δ` : t("params.defaults");
+    el("param-summary").textContent = summary;
+    el("param-summary").classList.toggle("modified", Boolean(changedDefault.length));
+
+    Object.entries(PARAM_LABEL_KEYS).forEach(([name, key]) => {
+      const label = document.querySelector(`[data-param="${name}"]`);
+      if (!label) return;
+      const isActive = supported(name);
+      label.classList.toggle("unsupported", !isActive);
+      label.querySelectorAll("input, select").forEach((node) => { node.disabled = !isActive; });
+      label.classList.toggle("modified", changedDefault.includes(name));
+      label.title = isActive
+        ? t("params.default", { value: formatParam(name, state.paramDefaults[name]) })
+        : "";
+    });
+
+    const current = flattenParams();
+    const arm = currentArm();
+    const chips = [`<span class="chip algorithm">${t("params.algorithm")}: ${t(`ctl.arm.${arm}`)}</span>`];
+    PRIMARY_PARAMS.map((name) => {
+      const changed = changedDefault.includes(name);
+      return `<span class="chip${changed ? " changed" : ""}">${t(PARAM_LABEL_KEYS[name])}: ${formatParam(name, current[name])}</span>`;
+    }).forEach((chip) => chips.push(chip));
+    changedDefault
+      .filter((name) => !PRIMARY_PARAMS.includes(name))
+      .forEach((name) => {
+        chips.push(`<span class="chip changed">${t(PARAM_LABEL_KEYS[name])}: ${formatParam(name, current[name])}</span>`);
+      });
+    if (!changedDefault.length) chips.push(`<span class="chip">${t("params.defaults")}</span>`);
+    el("param-chips").innerHTML = chips.join("");
+  }
+
+  function applyDefaults(defaults, prefs) {
     const set = (id, value) => {
       if (value === undefined || value === null) return;
       const node = el(id);
@@ -567,6 +741,19 @@
     set("p-temp", defaults.temp_mode);
     set("p-var", defaults.variability);
     set("p-smb", defaults.smb_ratio_3min);
+    const prefIds = {
+      bgAccel_ISF_weight: "p-w-accel", bgBrake_ISF_weight: "p-w-brake",
+      lower_ISFrange_weight: "p-w-lower", higher_ISFrange_weight: "p-w-higher",
+      pp_ISF_weight: "p-w-pp", dura_ISF_weight: "p-w-dura",
+      autoISF_min: "p-isf-min", autoISF_max: "p-isf-max",
+      dynisf_velocity: "p-dynisf-velocity", dynisf_bg_cap: "p-dynisf-cap",
+    };
+    Object.entries(prefs || {}).forEach(([key, value]) => {
+      const id = prefIds[key];
+      if (id && value !== undefined && value !== null) el(id).value = String(value);
+    });
+    setParamDefaults(defaults, prefs);
+    renderParamState();
   }
 
   fetch("/api/options")
@@ -577,7 +764,7 @@
       if (Array.isArray(data.base_subjects) && data.base_subjects.length) {
         baseSubjects = data.base_subjects;
       }
-      applyDefaults(data.defaults || {});
+      applyDefaults(data.defaults || {}, data.prefs || {});
       fillSubjects();
       fillScenarios();
       selectRun();
@@ -586,6 +773,9 @@
 
   fillSubjects();
   fillScenarios();
+  setParamDefaults(FALLBACK_DEFAULTS, FALLBACK_PREFS);
+  installParamSliders();
+  renderParamState();
 
   const params = new URLSearchParams(window.location.search);
   if (params.get("params") === "1") el("params").open = true;
@@ -607,6 +797,7 @@
   document.querySelectorAll("#params input, #params select").forEach((node) => {
     node.addEventListener("change", () => {
       if (!state.live) el("param-note").textContent = t("params.note");
+      renderParamState();
     });
   });
 
@@ -625,6 +816,7 @@
     document.querySelectorAll(".arm").forEach((x) => x.classList.remove("active"));
     b.classList.add("active");
     selectRun();
+    renderParamState();
   }));
 
   el("live").addEventListener("click", () => {
@@ -692,11 +884,13 @@
 
   el("meta").textContent = `${payload.model} · ${runs.length} runs · ${payload.generated_at}`;
   selectRun();
+  renderParamState();
   window.addEventListener("sim-lang", () => {
     fillScenarios();
     drawCards();
     drawDeltas();
     draw();
+    renderParamState();
     if (!state.live) el("live").textContent = t("ctl.live");
   });
 

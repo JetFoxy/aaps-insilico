@@ -9,7 +9,10 @@ The derived cohort is S2008/S2013, not the S2017 population: see PROVENANCE.md.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, TypeVar
 
 import numpy as np
 
@@ -17,6 +20,33 @@ from .model import Bolus, Meal, Schedule, simulate
 from .params import Subject, load_subjects
 
 DIET_G = {"adult": 180.0, "adolescent": 180.0, "child": 135.0}
+_PROFILE_CACHE: dict[tuple, Any] = {}
+_CACHE_MISS = object()
+_ProfileValue = TypeVar("_ProfileValue")
+
+
+def clear_profile_cache() -> None:
+    _PROFILE_CACHE.clear()
+
+
+def _subject_identity(subject: Subject) -> tuple:
+    return (
+        subject.name,
+        tuple(sorted(subject.params.items())),
+        tuple(subject.state0.tolist()),
+    )
+
+
+def _cached_profile(key: tuple, producer: Callable[[], _ProfileValue]) -> _ProfileValue:
+    try:
+        hash(key)
+    except TypeError:
+        return producer()
+    value = _PROFILE_CACHE.get(key, _CACHE_MISS)
+    if value is _CACHE_MISS:
+        value = producer()
+        _PROFILE_CACHE[key] = value
+    return value
 
 
 def group_of(subject: Subject) -> str:
@@ -35,6 +65,18 @@ def compute_cr(
     s2013: bolus with 3 h glucose 85-110 % of basal, min > 90, max 40-80 above basal
            (Dalla Man 2014); may be infeasible for the derived cohort.
     """
+    if grid is None:
+        cache_key = _subject_identity(subject) + ("cr", meal_g, rule)
+        return _cached_profile(cache_key, lambda: _compute_cr(subject, meal_g, None, rule))
+    return _compute_cr(subject, meal_g, grid, rule)
+
+
+def _compute_cr(
+    subject: Subject,
+    meal_g: float,
+    grid: np.ndarray | None,
+    rule: str,
+) -> float | None:
     gb = subject.gb
     if grid is None:
         grid = np.arange(1.0, 20.01, 0.5)
@@ -93,11 +135,34 @@ def compute_isf_model(subject: Subject, units: float = 1.0, t_end: float = 480.0
     own correction factor, not the empirical 1700/TDI rule: for the derived cohort the rule gives
     2-3x larger values (see docs/acceptance/A3.md).
     """
+    cache_key = _subject_identity(subject) + ("isf-model", units, t_end, max_drop)
+    return _cached_profile(cache_key, lambda: _compute_isf_model(subject, units, t_end, max_drop))
+
+
+def _compute_isf_model(subject: Subject, units: float, t_end: float, max_drop: float) -> float:
     drop = _nadir_drop(subject, units, t_end)
     while drop > max_drop and units > 0.25:
         units /= 2.0
         drop = _nadir_drop(subject, units, t_end)
     return float(drop / units)
+
+
+def cached_subject_profile(subject: Subject, isf_source: str = "rule") -> Mapping[str, float | None]:
+    cache_key = _subject_identity(subject) + ("profile", isf_source)
+    profile = _cached_profile(cache_key, lambda: _subject_profile(subject, isf_source))
+    return MappingProxyType(dict(profile))
+
+
+def _subject_profile(subject: Subject, isf_source: str) -> dict[str, float | None]:
+    cr = compute_cr(subject)
+    tdi = compute_tdi(subject, cr)
+    if isf_source == "model":
+        isf = compute_isf_model(subject)
+    elif isf_source == "rule":
+        isf = compute_cf(tdi)
+    else:
+        raise ValueError(f"unknown ISF source {isf_source!r}")
+    return {"cr": cr, "tdi": tdi, "isf": isf}
 
 
 @dataclass
@@ -117,7 +182,7 @@ def cohort_rows(subjects: dict[str, Subject] | None = None) -> list[CohortRow]:
     rows: list[CohortRow] = []
     for name in sorted(subjects):
         subject = subjects[name]
-        cr = compute_cr(subject, rule="s2008")
+        cr = cached_subject_profile(subject, "rule")["cr"]
         tdi = compute_tdi(subject, cr)
         rows.append(
             CohortRow(

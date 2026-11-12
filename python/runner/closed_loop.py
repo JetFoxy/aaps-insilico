@@ -208,9 +208,6 @@ def run_closed_loop(
             cgm_history.append([EPOCH0_MS + int(t1 * 60_000), value])
 
         now_ms = EPOCH0_MS + int(t1 * 60_000)
-        glucose = bridge.request({
-            "cmd": "glucose", "now": now_ms, "readings": cgm_history, "sourceSensor": "Libre2",
-        })["glucose"]
 
         rate_now = basal_u_per_h
         insulin_req = 0.0
@@ -230,67 +227,26 @@ def run_closed_loop(
         else:
             current_temp = {"duration": int(cadence_min), "rate": basal_u_per_h, "minutesrunning": 0}
 
-        if glucose is not None:
-            treatments = applied_temps + applied_boluses
-            iob = bridge.request({
-                "cmd": "iob", "now": now_ms, "autosens": 1.0,
-                "exerciseMode": False, "halfBasalExerciseTarget": 160, "isTempTarget": False,
-                "treatments": treatments,
-            })["iob"]
-            iob_now = float(iob[0]["iob"])
-
-            if profile.algorithm == "dynisf":
-                auto = bridge.request({
-                    "cmd": "dynisf", "now": now_ms,
-                    "readings": cgm_history, "sourceSensor": "Libre2",
-                    "isf": profile.sens, "carbRatio": profile.carb_ratio,
-                    "target": profile.target_bg, "targetLow": profile.target_bg,
-                    "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
-                    "tdd": profile.tdd,
-                })
-                candidate = auto.get("sens")
-                if candidate is not None and math.isfinite(candidate) and candidate > 0:
-                    variable_sens = float(candidate)
-            elif profile.enable_auto_isf:
-                auto = bridge.request({
-                    "cmd": "autoisf", "now": now_ms,
-                    "readings": cgm_history, "sourceSensor": "Libre2",
-                    "isf": profile.sens, "carbRatio": profile.carb_ratio,
-                    "target": profile.target_bg, "targetLow": profile.target_bg,
-                    "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
-                })
-                candidate = auto.get("sens")
-                if candidate is not None and math.isfinite(candidate) and candidate > 0:
-                    variable_sens = float(candidate)
-
-            meal_json = {"carbs": 0.0, "mealCOB": 0.0}
-            if scenario.meal_mode == "announced":
-                meal_result = bridge.request({
-                    "cmd": "meal", "now": now_ms,
-                    "readings": cgm_history, "sourceSensor": "Libre2",
-                    "isf": profile.sens, "carbRatio": profile.carb_ratio,
-                    "target": profile.target_bg, "targetLow": profile.target_bg,
-                    "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
-                })
-                meal_json = {
-                    "carbs": meal_result["carbs"], "mealCOB": meal_result["mealCOB"],
-                    "slopeFromMaxDeviation": meal_result["slopeFromMaxDeviation"],
-                    "slopeFromMinDeviation": meal_result["slopeFromMinDeviation"],
-                    "usedMinCarbsImpact": meal_result["usedMinCarbsImpact"],
-                    "lastBolusTime": meal_result["lastBolusTime"],
-                    "lastCarbTime": meal_result["lastCarbTime"],
-                }
-            cob_now = float(meal_json["mealCOB"])
-
-            step_cmd = "stepSmb" if profile.algorithm == "dynisf" else "step"
-            rt = bridge.request({"cmd": step_cmd, "input": {
+        treatments = applied_temps + applied_boluses
+        algorithm = "dynisf" if profile.algorithm == "dynisf" else (
+            "autoisf" if profile.enable_auto_isf else None
+        )
+        meal_json = {"carbs": 0.0, "mealCOB": 0.0}
+        cycle = bridge.request({
+            "cmd": "cycle", "now": now_ms, "readings": cgm_history,
+            "sourceSensor": "Libre2", "autosens": 1.0,
+            "exerciseMode": False, "halfBasalExerciseTarget": 160,
+            "isTempTarget": False, "treatments": treatments,
+            "mealMode": scenario.meal_mode,
+            "isf": profile.sens, "carbRatio": profile.carb_ratio,
+            "target": profile.target_bg, "targetLow": profile.target_bg,
+            "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
+            "tdd": profile.tdd, "algorithm": algorithm,
+            "input": {
                 "now": now_ms,
                 "TDD": profile.tdd,
-                "glucoseStatus": glucose,
                 "currentTemp": current_temp,
-                "iob": iob,
                 "autosens": {"ratio": 1.0},
-                "meal": meal_json,
                 "profile": {
                     "sens": profile.sens, "variable_sens": variable_sens,
                     "carb_ratio": profile.carb_ratio, "target_bg": profile.target_bg,
@@ -312,7 +268,30 @@ def run_closed_loop(
                 "iobThresholdPercent": 100,
                 "profilePercentage": 100,
                 "activityConsoleLog": "",
-            }})["rt"]
+            },
+        })
+        glucose_response = cycle.get("glucose")
+        if glucose_response is not None and glucose_response.get("glucose") is not None:
+            glucose = glucose_response["glucose"]
+            iob = cycle["iob"]["iob"]
+            iob_now = float(iob[0]["iob"])
+            auto = cycle.get("algorithm")
+            if algorithm is not None:
+                candidate = auto.get("sens")
+                if candidate is not None and math.isfinite(candidate) and candidate > 0:
+                    variable_sens = float(candidate)
+            if scenario.meal_mode == "announced":
+                meal_result = cycle["meal"]
+                meal_json = {
+                    "carbs": meal_result["carbs"], "mealCOB": meal_result["mealCOB"],
+                    "slopeFromMaxDeviation": meal_result["slopeFromMaxDeviation"],
+                    "slopeFromMinDeviation": meal_result["slopeFromMinDeviation"],
+                    "usedMinCarbsImpact": meal_result["usedMinCarbsImpact"],
+                    "lastBolusTime": meal_result["lastBolusTime"],
+                    "lastCarbTime": meal_result["lastCarbTime"],
+                }
+            cob_now = float(meal_json["mealCOB"])
+            rt = cycle["rt"]
 
             insulin_req = float(rt.get("insulinReq") or 0.0)
             reason_text = str(rt.get("reason") or "")

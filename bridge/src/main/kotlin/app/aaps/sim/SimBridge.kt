@@ -70,6 +70,7 @@ class Bridge {
         return when (val cmd = request.str("cmd")) {
             "init" -> init(request)
             "glucose" -> glucose(request)
+            "cycle" -> cycle(request)
             "iob" -> iob(request)
             "autoisf" -> autoisf(request)
             "autoisfStatus" -> autoisfStatus(request)
@@ -236,6 +237,65 @@ class Bridge {
                 put("spacingSec", if (orig.size > 2) (orig[0].timestamp - orig[2].timestamp) / 2000.0 else -1.0)
                 put("newest", orig.firstOrNull()?.timestamp ?: 0L)
             })
+        }
+    }
+
+    private fun cycle(request: JsonObject): JsonObject {
+        val algorithmElement = request["algorithm"]
+        val algorithmName = when (algorithmElement) {
+            null, is JsonNull -> null
+            is JsonPrimitive -> algorithmElement.content
+            else -> error("algorithm must be a string")
+        }
+        when (algorithmName) {
+            null, "autoisf", "dynisf" -> {}
+            else -> error("unknown algorithm: $algorithmName")
+        }
+        val glucoseResponse = glucose(request)
+        val hasGlucose = glucoseResponse["glucose"] !is JsonNull
+        if (!hasGlucose) {
+            return buildJsonObject {
+                put("glucose", glucoseResponse)
+                put("iob", JsonNull)
+                put("algorithm", JsonNull)
+                put("meal", JsonNull)
+                put("rt", JsonNull)
+            }
+        }
+
+        val iobResponse = iob(request)
+        val algorithm = when (algorithmName) {
+            null -> null
+            "autoisf" -> autoisf(request)
+            "dynisf" -> dynisf(request)
+            else -> error("unknown algorithm: $algorithmName")
+        }
+        val mealResponse = if (request.str("mealMode") == "announced") meal(request) else null
+        val inputMap = request.obj("input")!!.toMutableMap()
+        val algorithmSens = (algorithm?.get("sens") as? JsonPrimitive)?.doubleOrNull
+        if (algorithmSens != null && algorithmSens.isFinite() && algorithmSens > 0.0) {
+            val profile = inputMap["profile"] as? JsonObject ?: JsonObject(emptyMap())
+            inputMap["profile"] = JsonObject(profile.toMutableMap().apply {
+                put("variable_sens", JsonPrimitive(algorithmSens))
+            })
+        }
+        val stepInput = JsonObject(inputMap.apply {
+            put("glucoseStatus", glucoseResponse["glucose"] ?: JsonNull)
+            put("iob", iobResponse["iob"] ?: JsonNull)
+            put("meal", mealResponse ?: JsonObject(mapOf(
+                "carbs" to JsonPrimitive(0.0),
+                "mealCOB" to JsonPrimitive(0.0),
+            )))
+        })
+        val stepRequest = JsonObject(request.toMutableMap().apply { put("input", stepInput) })
+        val stepResponse = if (algorithmName == "dynisf") stepSmb(stepRequest) else step(stepRequest)
+
+        return buildJsonObject {
+            put("glucose", glucoseResponse)
+            put("iob", iobResponse)
+            if (algorithm == null) put("algorithm", JsonNull) else put("algorithm", algorithm)
+            if (mealResponse == null) put("meal", JsonNull) else put("meal", mealResponse)
+            put("rt", stepResponse["rt"] ?: JsonNull)
         }
     }
 

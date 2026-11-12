@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import dataclasses
 import json
 import multiprocessing as mp
@@ -23,10 +24,11 @@ from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
 from simcore.params import load_subject
 from simcore.variability import si_day
-from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
+from simcore.population import cached_subject_profile
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
+worker_bridge: Bridge | None = None
 
 METRIC_KEYS = [
     "tir_70_180", "tbr_70", "tbr_54", "lbgi", "smb_count", "total_insulin",
@@ -81,9 +83,10 @@ SCENARIOS = {
 
 
 def profile_for(subject, auto_isf: bool, scale: float = 1.0, isf_source: str = "rule") -> AlgorithmProfile:
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
-    isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
+    profile = cached_subject_profile(subject, isf_source)
+    cr = profile["cr"] or 10.5
+    tdi = profile["tdi"] or 40.0
+    isf = profile["isf"] or 50.0
     return AlgorithmProfile(
         sens=isf * scale, carb_ratio=cr * scale, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
@@ -108,13 +111,15 @@ def run_task(task: dict) -> dict:
         )
     profile = profile_for(subject, auto_isf, spec["profile_scale"], isf_source)
     residuals = load_residuals(task.get("residuals_path"))
-    with Bridge() as bridge:
-        init_bridge(bridge, subject, task["prefs"], INSULIN, profile, scenario)
-        loop = run_closed_loop(
-            subject, bridge, profile, scenario,
-            seed=seed, residuals=residuals, temp_mode=temp_mode,
-            **task["noise"],
-        )
+    if worker_bridge is None:
+        raise RuntimeError("run_task requires the multiprocessing worker initializer")
+    bridge = worker_bridge
+    init_bridge(bridge, subject, task["prefs"], INSULIN, profile, scenario)
+    loop = run_closed_loop(
+        subject, bridge, profile, scenario,
+        seed=seed, residuals=residuals, temp_mode=temp_mode,
+        **task["noise"],
+    )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
     sens = np.array(loop.variable_sens, dtype=float)
     metrics["sens_ratio_mean"] = float(np.mean(sens) / profile.sens)
@@ -131,6 +136,19 @@ def run_task(task: dict) -> dict:
         "isf_source": isf_source,
         "metrics": metrics,
     }
+
+
+def _init_worker() -> None:
+    global worker_bridge
+    worker_bridge = Bridge()
+    atexit.register(_close_worker_bridge)
+
+
+def _close_worker_bridge() -> None:
+    global worker_bridge
+    if worker_bridge is not None:
+        worker_bridge.close()
+        worker_bridge = None
 
 
 def paired_stats(rows: list[dict], key: str) -> dict:
@@ -187,8 +205,12 @@ def main() -> int:
     ]
 
     started = time.time()
-    with mp.Pool(processes=args.workers) as pool:
+    pool = mp.Pool(processes=args.workers, initializer=_init_worker)
+    try:
         results = pool.map(run_task, tasks, chunksize=1)
+    finally:
+        pool.close()
+        pool.join()
 
     by_key = {(row["subject"], row["scenario"], row["auto_isf"]): row for row in results}
     report = {}

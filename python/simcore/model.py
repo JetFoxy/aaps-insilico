@@ -226,15 +226,18 @@ def simulate(
     dt: float = 1.0,
     time_varying: TimeVarying | None = None,
     x0: np.ndarray | None = None,
+    method: str = "BDF",
 ) -> Trace:
     core = Core(subject, schedule, time_varying)
     y0 = subject.state0.copy() if x0 is None else np.array(x0, dtype=float)
     t_eval = np.arange(0.0, t_end + 0.5 * dt, dt)
+    if method not in ("BDF", "LSODA"):
+        raise ValueError(f"unknown integration method {method!r}")
     solution = solve_ivp(
         core.rhs,
         (0.0, t_end),
         y0,
-        method="BDF",
+        method=method,
         t_eval=t_eval,
         rtol=1e-6,
         atol=1e-9,

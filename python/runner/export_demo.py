@@ -21,7 +21,7 @@ from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_clos
 from runner.metrics import compute_metrics
 from runner.options import add_options, apply_prefs, noise_kwargs
 from simcore.params import load_subject
-from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
+from simcore.population import cached_subject_profile
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -49,9 +49,10 @@ def build_scenario(name: str) -> tuple[Scenario, PumpConfig | None]:
 
 
 def profile_for(subject, auto_isf: bool, isf_source: str = "rule", smb_ratio_3min: float = 0.3, algorithm: str = "autoisf") -> AlgorithmProfile:
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
-    isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
+    cached = cached_subject_profile(subject, isf_source)
+    cr = cached["cr"] or 10.5
+    tdi = cached["tdi"] or 40.0
+    isf = cached["isf"] or 50.0
     return AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
@@ -60,17 +61,18 @@ def profile_for(subject, auto_isf: bool, isf_source: str = "rule", smb_ratio_3mi
     )
 
 
-def export_run(subject_name: str, scenario_name: str, auto_isf: bool, prefs: dict, noise: dict) -> dict:
+def export_run(
+    subject_name: str, scenario_name: str, auto_isf: bool, prefs: dict, noise: dict, bridge: Bridge,
+) -> dict:
     subject = load_subject(subject_name)
     scenario, pump_config = build_scenario(scenario_name)
     profile = profile_for(subject, auto_isf)
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
-    with Bridge() as bridge:
-        init_bridge(bridge, subject, prefs, INSULIN, profile, scenario)
-        loop = run_closed_loop(
-            subject, bridge, profile, scenario, seed=seed, residuals=RESIDUALS,
-            pump_config=pump_config, **noise,
-        )
+    init_bridge(bridge, subject, prefs, INSULIN, profile, scenario)
+    loop = run_closed_loop(
+        subject, bridge, profile, scenario, seed=seed, residuals=RESIDUALS,
+        pump_config=pump_config, **noise,
+    )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
     smb = [[round(t, 1), round(u, 2)] for t, u, kind in loop.dose_events if kind == "bolus"]
     return {
@@ -117,11 +119,12 @@ def main() -> int:
     noise = noise_kwargs(args)
     started = time.time()
     runs = []
-    for subject, name, auto_isf in RUNS:
-        run = export_run(subject, name, auto_isf, prefs, noise)
-        runs.append(run)
-        print(f"{run['id']:40s} TIR={run['metrics']['tir_70_180']:.3f} "
-              f"TBR={run['metrics']['tbr_70']:.3f} dose={run['metrics']['total_insulin']:.1f}", flush=True)
+    with Bridge() as bridge:
+        for subject, name, auto_isf in RUNS:
+            run = export_run(subject, name, auto_isf, prefs, noise, bridge)
+            runs.append(run)
+            print(f"{run['id']:40s} TIR={run['metrics']['tir_70_180']:.3f} "
+                  f"TBR={run['metrics']['tbr_70']:.3f} dose={run['metrics']['total_insulin']:.1f}", flush=True)
 
     out = ROOT / "web" / "data" / "runs.js"
     out.parent.mkdir(parents=True, exist_ok=True)
