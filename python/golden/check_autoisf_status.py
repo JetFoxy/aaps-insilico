@@ -23,6 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
+import numpy as np
+
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from cgm.validate_sensors import load_trace
 
@@ -76,10 +78,17 @@ def main() -> int:
         for index in range(12, len(block)):
             row = block[index]
             now = int(row["timestampMs"])
-            history = [
-                {"ts": int(item["timestampMs"]), "glucose": float(item["glucose"]), "filledGap": False}
-                for item in block[: index + 1]
-            ][::-1]
+            history = []
+            for item in block[: index + 1]:
+                ts = int(item["timestampMs"])
+                smoothed = float(item["glucose"])
+                raw = smoothed
+                if trace_ts is not None:
+                    near = int(np.argmin(np.abs(trace_ts - ts)))
+                    if abs(int(trace_ts[near]) - ts) <= 60_000:
+                        raw = float(trace_values[near])
+                history.append({"ts": ts, "value": raw, "smoothed": smoothed, "filledGap": False})
+            history = history[::-1]
             raw = None
             if trace_ts is not None:
                 window = (trace_ts >= now - 6 * 60 * 60_000) & (trace_ts <= now)

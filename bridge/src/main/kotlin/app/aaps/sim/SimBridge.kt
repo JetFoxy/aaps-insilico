@@ -403,11 +403,11 @@ class Bridge {
         val now = request.long("now")
         val statusData = request.arr("statusData")?.mapNotNull { element ->
             val obj = element as? JsonObject ?: return@mapNotNull null
-            val value = obj.num("glucose")
+            val value = obj.num("value", obj.num("glucose"))
             InMemoryGlucoseValue(
                 timestamp = obj.long("ts"),
                 value = value,
-                smoothed = obj["smoothed"]?.jsonPrimitive?.doubleOrNull ?: value,
+                smoothed = obj["smoothed"]?.jsonPrimitive?.doubleOrNull,
                 calibrated = obj["calibrated"]?.jsonPrimitive?.doubleOrNull,
                 filledGap = obj.bool("filledGap", false),
             )
