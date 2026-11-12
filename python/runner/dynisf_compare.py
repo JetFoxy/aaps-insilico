@@ -2,6 +2,7 @@
 """Compare autoISF off / on / DynISF on the same subjects and scenario."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import multiprocessing as mp
 import sys
@@ -20,7 +21,8 @@ from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_clos
 from runner.options import add_options, load_cohort
 from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
-from simcore.population import compute_cf, compute_cr, compute_tdi
+from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
+from simcore.variability import si_day
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -30,21 +32,27 @@ ARMS = ("off", "autoisf", "dynisf")
 KEYS = ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
 
 
-def run_task(task: tuple[str, str, object]) -> dict:
-    name, arm, subject = task
+def run_task(task: tuple[str, str, object, bool, str]) -> dict:
+    name, arm, subject, variability, isf_source = task
     cr = compute_cr(subject) or 10.5
     tdi = compute_tdi(subject, cr) or 40.0
+    isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
     profile = AlgorithmProfile(
-        sens=compute_cf(tdi) or 50.0, carb_ratio=cr, target_bg=110.0,
+        sens=isf, carb_ratio=cr, target_bg=110.0,
         current_basal=subject.basal_u_per_min * 60,
         enable_auto_isf=(arm == "autoisf"),
         algorithm="dynisf" if arm == "dynisf" else "autoisf",
         tdd=tdi,
     )
     seed = zlib.crc32(name.encode()) & 0xFFFF
+    scenario = SCENARIO
+    if variability:
+        scenario = dataclasses.replace(
+            scenario, si_multipliers=si_day(seed).multipliers, dawn_egp=1.5,
+        )
     with Bridge() as bridge:
-        init_bridge(bridge, subject, PREFS, INSULIN, profile, SCENARIO)
-        loop = run_closed_loop(subject, bridge, profile, SCENARIO, seed=seed, residuals=RESIDUALS)
+        init_bridge(bridge, subject, PREFS, INSULIN, profile, scenario)
+        loop = run_closed_loop(subject, bridge, profile, scenario, seed=seed, residuals=RESIDUALS)
     return {"subject": name, "arm": arm, "metrics": compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()}
 
 
@@ -55,12 +63,17 @@ def main() -> int:
     ap.add_argument("--subjects", type=int, default=6)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--out", default="out/dynisf_compare.json")
+    ap.add_argument("--variability", action="store_true")
+    ap.add_argument("--isf-source", default="rule", choices=("rule", "model"))
     add_options(ap)
     args = ap.parse_args()
 
     cohort = load_cohort(args.cohort_copies, args.cohort_seed)
     names = [name for name, _ in sorted(cohort.items())][: args.subjects]
-    tasks = [(name, arm, cohort[name]) for arm in ARMS for name in names]
+    tasks = [
+        (name, arm, cohort[name], args.variability, args.isf_source)
+        for arm in ARMS for name in names
+    ]
     started = time.time()
     with mp.Pool(processes=args.workers) as pool:
         results = pool.map(run_task, tasks, chunksize=1)
