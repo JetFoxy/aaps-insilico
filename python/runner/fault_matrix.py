@@ -43,13 +43,13 @@ FAULTS: dict[str, dict] = {
 }
 
 
-def profile_for(subject, auto_isf: bool = False) -> AlgorithmProfile:
+def profile_for(subject, auto_isf: bool = False, algorithm: str = "autoisf") -> AlgorithmProfile:
     cr = compute_cr(subject) or 10.5
     tdi = compute_tdi(subject, cr) or 40.0
     return AlgorithmProfile(
         sens=compute_cf(tdi) or 50.0, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
-        enable_auto_isf=auto_isf,
+        enable_auto_isf=auto_isf, algorithm=algorithm, tdd=tdi,
     )
 
 
@@ -58,8 +58,9 @@ def run_task(task: dict) -> dict:
     subject_name = subject.name
     fault = task["fault"]
     auto_isf = task["auto_isf"]
+    algorithm = task.get("algorithm", "autoisf")
     spec = FAULTS[fault]
-    profile = profile_for(subject, auto_isf)
+    profile = profile_for(subject, auto_isf, algorithm)
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
     residuals = load_residuals(task.get("residuals_path"))
     with Bridge() as bridge:
@@ -69,7 +70,10 @@ def run_task(task: dict) -> dict:
             pump_config=spec["pump"], **task["noise"],
         )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
-    return {"subject": subject_name, "fault": fault, "auto_isf": auto_isf, "metrics": metrics}
+    return {
+        "subject": subject_name, "fault": fault, "auto_isf": auto_isf,
+        "algorithm": algorithm, "metrics": metrics,
+    }
 
 
 def main() -> int:
@@ -77,6 +81,7 @@ def main() -> int:
     ap.add_argument("--subjects", type=int, default=10)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--compare", action="store_true", help="run autoISF off/on and report paired deltas")
+    ap.add_argument("--dynisf", action="store_true", help="also run the DynISF arm and report off vs dynisf")
     ap.add_argument("--out", default="out/fault_matrix.json")
     add_options(ap)
     args = ap.parse_args()
@@ -85,33 +90,46 @@ def main() -> int:
     names = [name for name, _ in sorted(cohort.items())][: args.subjects]
     prefs = apply_prefs(PREFS, args.pref)
     noise = noise_kwargs(args)
-    arms = (False, True) if args.compare else (False,)
+    arms = [(False, "autoisf")]
+    if args.compare:
+        arms.append((True, "autoisf"))
+    if args.dynisf:
+        arms.append((False, "dynisf"))
     tasks = [
-        {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "prefs": prefs,
-         "noise": noise, "residuals_path": args.noise_file}
-        for fault in FAULTS for name in names for auto_isf in arms
+        {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "algorithm": algorithm,
+         "prefs": prefs, "noise": noise, "residuals_path": args.noise_file}
+        for fault in FAULTS for name in names for auto_isf, algorithm in arms
     ]
     started = time.time()
     with mp.Pool(processes=args.workers) as pool:
         results = pool.map(run_task, tasks, chunksize=1)
 
-    by_key = {(row["subject"], row["fault"], row["auto_isf"]): row["metrics"] for row in results}
+    by_key = {(row["subject"], row["fault"], row["auto_isf"], row.get("algorithm", "autoisf")): row["metrics"] for row in results}
     report = {}
     for fault in FAULTS:
-        rows = [by_key[(name, fault, False)] for name in names]
+        rows = [by_key[(name, fault, False, "autoisf")] for name in names]
         report[fault] = {
             key: float(np.mean([row[key] for row in rows])) for key in METRICS
         }
         report[fault]["n"] = len(rows)
         report[fault]["delta_tir_vs_baseline"] = float(
-            np.mean([by_key[(name, fault, False)]["tir_70_180"] - by_key[(name, "baseline", False)]["tir_70_180"] for name in names])
+            np.mean([by_key[(name, fault, False, "autoisf")]["tir_70_180"] - by_key[(name, "baseline", False, "autoisf")]["tir_70_180"] for name in names])
         )
         if args.compare:
             paired = [
-                {"off": by_key[(name, fault, False)], "on": by_key[(name, fault, True)]}
+                {"off": by_key[(name, fault, False, "autoisf")], "on": by_key[(name, fault, True, "autoisf")]}
                 for name in names
             ]
             report[fault]["auto_isf"] = {
+                key: paired_stats(paired, key)
+                for key in ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
+            }
+        if args.dynisf:
+            paired = [
+                {"off": by_key[(name, fault, False, "autoisf")], "on": by_key[(name, fault, False, "dynisf")]}
+                for name in names
+            ]
+            report[fault]["dynisf"] = {
                 key: paired_stats(paired, key)
                 for key in ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
             }
@@ -130,6 +148,17 @@ def main() -> int:
             f"{fault:22s} {stats['tir_70_180']:6.3f} {stats['delta_tir_vs_baseline']:+7.3f} "
             f"{stats['tbr_70']:6.3f} {stats['lbgi']:6.2f} {stats['smb_count']:5.0f} {stats['total_insulin']:6.1f}"
         )
+    if args.dynisf:
+        print("\n== DynISF vs off under each fault (paired)")
+        for fault, stats in report.items():
+            block = stats["dynisf"]
+            print(f"-- {fault}")
+            for key in ("tir_70_180", "tbr_70", "lbgi", "total_insulin", "insulin_while_falling_fraction"):
+                st = block[key]
+                print(
+                    f"   {key:30s} off={st['off_mean']:.3f} on={st['on_mean']:.3f} "
+                    f"diff={st['diff_mean']:+.3f} p={st['p_wilcoxon']:.4f}"
+                )
     if args.compare:
         print("\n== autoISF on/off under each fault (paired)")
         for fault, stats in report.items():
