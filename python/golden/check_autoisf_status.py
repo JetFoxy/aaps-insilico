@@ -56,6 +56,8 @@ def main() -> int:
     ap.add_argument("--tolerance", type=float, default=0.01)
     ap.add_argument("--trace", help="trace CSV with raw readings (mmol/L) for the raw-fit path")
     ap.add_argument("--readings", help="harness readings CSV (timestampMs,value in mg/dL)")
+    ap.add_argument("--readings-from-status", action="store_true",
+                    help="use the pipeline's own status series as readings (smoothed/grid pipelines)")
     ap.add_argument("--column", default="raw")
     args = ap.parse_args()
 
@@ -95,7 +97,9 @@ def main() -> int:
                 history.append({"ts": ts, "value": raw, "smoothed": smoothed, "filledGap": gap})
             history = history[::-1]
             raw = None
-            if trace_ts is not None:
+            if args.readings_from_status:
+                raw = [[int(item["timestampMs"]), float(item["glucose"])] for item in block[: index + 1]]
+            elif trace_ts is not None:
                 window = (trace_ts >= now - 6 * 60 * 60_000) & (trace_ts <= now)
                 raw = [[int(t), float(v)] for t, v in zip(trace_ts[window], trace_values[window])]
             response = bridge.request({
