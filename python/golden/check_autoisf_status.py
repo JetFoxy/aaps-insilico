@@ -55,6 +55,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=120)
     ap.add_argument("--tolerance", type=float, default=0.01)
     ap.add_argument("--trace", help="trace CSV with raw readings (mmol/L) for the raw-fit path")
+    ap.add_argument("--readings", help="harness readings CSV (timestampMs,value in mg/dL)")
     ap.add_argument("--column", default="raw")
     args = ap.parse_args()
 
@@ -64,7 +65,10 @@ def main() -> int:
         return 1
     readings = [[int(row["timestampMs"]), float(row["glucose"])] for row in block]
     trace_ts, trace_values = (None, None)
-    if args.trace:
+    if args.readings:
+        data = np.loadtxt(Path(args.readings).expanduser(), delimiter=",", skiprows=1)
+        trace_ts, trace_values = data[:, 0].astype(np.int64), data[:, 1]
+    elif args.trace:
         trace_ts, trace_values = load_trace(Path(args.trace).expanduser(), args.column)
     prefs = load_prefs(ROOT / "data/raw/settings.json")
     insulin = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
