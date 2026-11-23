@@ -80,6 +80,9 @@ def decode_export(text: str, password: str | None) -> dict[str, object]:
     payload = _parse_json(text)
     if not isinstance(payload, dict):
         raise PrefsDecryptError("export is not a settings object")
+    has_envelope = "security" in payload or "content" in payload
     if payload.get("format") != _ENCRYPTED_FORMAT:
+        if has_envelope:
+            raise PrefsDecryptError("unsupported export format")
         return payload
     return _decrypt(payload, password)

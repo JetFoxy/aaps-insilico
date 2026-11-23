@@ -50,3 +50,14 @@ def test_missing_password_is_reported():
 
 def test_plain_prefs_are_returned_as_is():
     assert decode_export('{"a": "1"}', None) == {"a": "1"}
+
+
+@pytest.mark.parametrize("fmt", ["aaps_encrypted_v2", "aaps", None])
+def test_unknown_format_with_envelope_is_rejected(fmt):
+    payload = json.loads(encode({"a": "1"}, "pw"))
+    if fmt is None:
+        payload.pop("format")
+    else:
+        payload["format"] = fmt
+    with pytest.raises(PrefsDecryptError, match="unsupported export format"):
+        decode_export(json.dumps(payload), "pw")
