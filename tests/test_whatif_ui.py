@@ -25,5 +25,9 @@ def test_i18n_has_whatif_keys_in_both_languages():
         "whatif.mode.model",
         "whatif.variants",
         "whatif.warning.notPrediction",
+        "whatif.legend.bolus",
+        "whatif.metrics.realDay",
+        "whatif.notReproduced.parity",
+        "whatif.notReproduced.modelAbsolute",
     ):
         assert text.count(f'"{key}"') >= 2

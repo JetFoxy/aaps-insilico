@@ -258,6 +258,8 @@ def _parse_treatments(
     parsed: list[Treatment] = []
     warnings: list[str] = []
     unclassified = 0
+    exercise = 0
+    other_events = 0
     for raw in raw_treatments:
         if not isinstance(raw, dict):
             continue
@@ -328,11 +330,19 @@ def _parse_treatments(
             elif isinstance(profile_json, str) and profile_json.strip():
                 meta["profileJson"] = profile_json
             parsed.append(Treatment(ts=ts, kind="profile_switch", meta=meta))
+        elif event in ("exercise", "activity"):
+            exercise += 1
+            parsed.append(Treatment(ts=ts, kind="exercise", origin="manual"))
         else:
+            other_events += 1
             parsed.append(Treatment(ts=ts, kind="note", origin="manual"))
     parsed.sort(key=lambda treatment: treatment.ts)
     if unclassified:
         warnings.insert(0, f"unclassified bolus: {unclassified}")
+    if exercise:
+        warnings.append(f"exercise events not reproduced: {exercise}")
+    if other_events:
+        warnings.append(f"other Nightscout events not replayed: {other_events}")
     return parsed, warnings
 
 

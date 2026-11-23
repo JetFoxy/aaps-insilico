@@ -149,6 +149,19 @@ def test_profile_switch_without_usable_json_is_reported():
     assert any("without usable profileJson" in w for w in trace.warnings)
 
 
+def test_exercise_and_other_events_are_reported():
+    treatments = [
+        {"eventType": "Exercise", "date": T0, "duration": 30},
+        {"eventType": "Site Change", "date": T0 + MIN},
+    ]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+                        treatments=treatments,
+                        profiles=[profile_doc(T0 - 86_400_000, 5.0, 10.0, 1.0)],
+                        devicestatus=[], window_start=T0, window_end=T0 + 3600_000)
+    assert any("exercise events not reproduced: 1" in w for w in trace.warnings)
+    assert any("other Nightscout events not replayed: 1" in w for w in trace.warnings)
+
+
 def test_history_start_keeps_pre_window_cgm_points():
     entries = [
         {"type": "sgv", "date": T0 - 60 * MIN, "sgv": 90},

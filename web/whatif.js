@@ -774,10 +774,20 @@
       list.appendChild(item);
     };
     const model = state.run?.mode === "model";
-    if (model) add(t("whatif.notReproduced.model"), "static");
-    else add(t("whatif.notReproduced.tir"), "static");
+    if (model) {
+      add(t("whatif.notReproduced.model"), "static");
+      add(t("whatif.notReproduced.modelAbsolute"), "static");
+    } else {
+      add(t("whatif.notReproduced.tir"), "static");
+      add(t("whatif.notReproduced.parity"), "static");
+    }
     add(t("whatif.notReproduced.exercise"), "static");
     add(t("whatif.notReproduced.unknown"), "static");
+    if (model && (state.results || []).some(
+      (result) => (result.metrics?.match?.confidence || "good") !== "good",
+    )) {
+      add(t("whatif.notReproduced.modelLow"), "static");
+    }
 
     const seen = new Set();
     const warnings = [];
@@ -985,7 +995,10 @@
 
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.innerHTML = parts.join("");
-    el("chart-note").textContent = model && !realAvailable ? t("whatif.chart.noReal") : "";
+    const chartNotes = [];
+    if (model && !realAvailable) chartNotes.push(t("whatif.chart.noReal"));
+    if (model) chartNotes.push(t("whatif.notReproduced.modelAbsolute"));
+    el("chart-note").textContent = chartNotes.join(" ");
   }
 
   function onLanguageChange() {
