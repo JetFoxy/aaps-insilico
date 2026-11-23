@@ -119,6 +119,28 @@ def test_verdict_fails_when_a_factor_diverges_despite_main_fields():
     assert "factor:acceIsf" in reason
 
 
+def test_main_exits_non_zero_when_the_verdict_fails(tmp_path, monkeypatch):
+    import json
+
+    import golden.check_replay_parity as parity
+    from nightscout.trace import DayTrace, trace_to_dict
+    from runner.replay_loop import replay_to_dict
+
+    monkeypatch.setattr(parity, "ROOT", tmp_path)
+    trace = DayTrace(window_start=T0, window_end=T0 + 300_000, decisions=[decision(T0)])
+    replay = ReplayResult(ReplayVariant(label="A"), [cycle(T0, isf=55.0)], [], [])
+    trace_path = tmp_path / "trace.json"
+    replay_path = tmp_path / "replay.json"
+    trace_path.write_text(json.dumps(trace_to_dict(trace)), encoding="utf-8")
+    replay_path.write_text(json.dumps(replay_to_dict(replay)), encoding="utf-8")
+    code = parity.main([
+        "--trace", str(trace_path),
+        "--replay", str(replay_path),
+        "--out", str(tmp_path / "W2.md"),
+    ])
+    assert code == 1
+
+
 def test_parity_counts_only_in_window_decisions():
     from golden.check_replay_parity import _in_window_decisions
     from nightscout.trace import DayTrace
