@@ -94,6 +94,33 @@ def test_url_without_scheme_error_carries_no_token():
     assert "tok-secret" not in str(exc.value)
 
 
+def test_two_weeks_of_treatments_are_not_truncated_at_five_thousand():
+    records = [{"eventType": "Note", "date": index} for index in range(7400)]
+    stub = StubNightscout({"/api/v1/treatments.json": lambda q: (200, records)})
+    with stub:
+        client = NightscoutClient(stub.url, token="tok")
+        assert len(client.treatments(0, 1)) == 7400
+    _, query = stub.requests[0]
+    assert query["count"] == "20000"
+
+
+def test_truncation_warning_fires_on_a_full_page():
+    from nightscout.client import (
+        DEVICESTATUS_COUNT,
+        TREATMENTS_COUNT,
+        truncation_warnings,
+    )
+
+    assert truncation_warnings([], [], []) == []
+    warnings = truncation_warnings(
+        [{}] * 10,
+        [{}] * TREATMENTS_COUNT,
+        [{}] * DEVICESTATUS_COUNT,
+    )
+    assert any("treatments may be truncated" in warning for warning in warnings)
+    assert any("devicestatus may be truncated" in warning for warning in warnings)
+
+
 def test_api_secret_fallback_on_401():
     calls = []
 

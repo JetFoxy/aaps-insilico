@@ -9,7 +9,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from nightscout.client import NightscoutClient, NightscoutError
+from nightscout.client import NightscoutClient, NightscoutError, truncation_warnings
 from nightscout.prefs import PrefsDecryptError, decode_export
 from nightscout.trace import DayTrace, build_trace
 
@@ -83,6 +83,7 @@ def _import_window(args: argparse.Namespace) -> int:
         window_end=window_end,
         history_start=history_start,
     )
+    trace.warnings.extend(truncation_warnings(entries, treatments, devicestatus))
     if days < args.days:
         trace.warnings.append(f"window capped at {MAX_DAYS} days")
     summary = _summary(trace, prefs_loaded)

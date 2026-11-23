@@ -15,6 +15,10 @@ from typing import Any
 _TOKEN_PARAM = re.compile(r"(token=)[^&\s\"']+")
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
+ENTRIES_COUNT = 20000
+TREATMENTS_COUNT = 20000
+DEVICESTATUS_COUNT = 20000
+
 
 class NightscoutError(RuntimeError):
 
@@ -39,6 +43,23 @@ def _iso_ms(epoch_ms: int) -> str:
     return moment.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def truncation_warnings(
+    entries: list[dict],
+    treatments: list[dict],
+    devicestatus: list[dict],
+) -> list[str]:
+    """Report fetch results that hit the requested page size, where records may be missing."""
+    warnings: list[str] = []
+    for label, records, limit in (
+        ("entries", entries, ENTRIES_COUNT),
+        ("treatments", treatments, TREATMENTS_COUNT),
+        ("devicestatus", devicestatus, DEVICESTATUS_COUNT),
+    ):
+        if len(records) >= limit:
+            warnings.append(f"{label} may be truncated at {limit} records")
+    return warnings
+
+
 class NightscoutClient:
 
     def __init__(
@@ -61,7 +82,7 @@ class NightscoutClient:
         """Return all profile documents."""
         return self._get("/api/v1/profile.json", {})
 
-    def entries(self, start_ms: int, end_ms: int, count: int = 20000) -> list[dict]:
+    def entries(self, start_ms: int, end_ms: int, count: int = ENTRIES_COUNT) -> list[dict]:
         """Return CGM sgv entries in the inclusive epoch-ms window."""
         return self._get(
             "/api/v1/entries.json",
@@ -73,7 +94,7 @@ class NightscoutClient:
             },
         )
 
-    def treatments(self, start_ms: int, end_ms: int, count: int = 5000) -> list[dict]:
+    def treatments(self, start_ms: int, end_ms: int, count: int = TREATMENTS_COUNT) -> list[dict]:
         """Return treatments in the inclusive epoch-ms window."""
         return self._get(
             "/api/v1/treatments.json",
@@ -84,7 +105,7 @@ class NightscoutClient:
             },
         )
 
-    def devicestatus(self, start_ms: int, end_ms: int, count: int = 5000) -> list[dict]:
+    def devicestatus(self, start_ms: int, end_ms: int, count: int = DEVICESTATUS_COUNT) -> list[dict]:
         """Return device status documents in the inclusive epoch-ms window."""
         return self._get(
             "/api/v1/devicestatus.json",

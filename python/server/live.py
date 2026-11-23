@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
-from nightscout.client import NightscoutClient, NightscoutError
+from nightscout.client import NightscoutClient, NightscoutError, truncation_warnings
 from nightscout.prefs import PrefsDecryptError, decode_export
 from nightscout.trace import DayTrace, build_trace
 from runner.closed_loop import init_bridge, run_closed_loop
@@ -253,6 +253,7 @@ def whatif_fetch(payload: dict) -> tuple[dict, str]:
             window_end=window_end,
             history_start=history_start,
         )
+        trace.warnings.extend(truncation_warnings(entries, treatments, devicestatus))
         if days < requested:
             trace.warnings.append(f"window capped at {WHATIF_MAX_DAYS} days")
         if not trace.profiles:
