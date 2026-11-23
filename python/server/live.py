@@ -384,6 +384,36 @@ def _cycle_frame(index: int, label: str, cycle) -> dict:
     }
 
 
+def _real_insulin(trace: DayTrace) -> dict:
+    """Recorded manual boluses and loop SMBs inside the import window."""
+    manual_units = 0.0
+    manual_count = 0
+    smb_units = 0.0
+    smb_count = 0
+    events: list[list] = []
+    for treatment in trace.treatments:
+        if treatment.kind != "bolus" or not (
+            trace.window_start <= treatment.ts <= trace.window_end
+        ):
+            continue
+        if treatment.origin == "loop":
+            smb_units += treatment.amount
+            smb_count += 1
+            events.append([int(treatment.ts), float(treatment.amount), "SMB"])
+        else:
+            manual_units += treatment.amount
+            manual_count += 1
+            events.append([int(treatment.ts), float(treatment.amount), "NORMAL"])
+    events.sort()
+    return {
+        "manual_units": round(manual_units, 3),
+        "manual_count": manual_count,
+        "smb_units": round(smb_units, 3),
+        "smb_count": smb_count,
+        "events": events,
+    }
+
+
 def _integrate_basal(cycles: list, window_end: int) -> float:
     """Basal units from each cycle rate over the delta to the next cycle and the window tail."""
     units = 0.0
@@ -402,13 +432,16 @@ def _variant_metrics(spec: dict, result) -> dict:
     cycles = list(result.cycles)
     smb_units = sum(cycle.smb for cycle in cycles)
     basal_units = _integrate_basal(cycles, int(spec["trace"].window_end))
+    real = _real_insulin(spec["trace"])
+    manual_units = float(real["manual_units"])
     iob_values = [cycle.iob for cycle in cycles if cycle.iob is not None]
     metrics = {
         "cycles": len(cycles),
         "smb_count": sum(1 for cycle in cycles if cycle.smb > 0),
         "smb_units": round(smb_units, 3),
+        "manual_units": round(manual_units, 3),
         "basal_units": round(basal_units, 3),
-        "total_units": round(smb_units + basal_units, 3),
+        "total_units": round(smb_units + basal_units + manual_units, 3),
         "iob_mean": round(sum(iob_values) / len(iob_values), 3) if iob_values else None,
     }
     if spec["mode"] == "replay":
@@ -442,7 +475,11 @@ def whatif_run(spec: dict, channel: "queue.Queue[dict]") -> None:
             "variants": [variant.label for variant in variants],
             "cadence_min": spec["cadence_min"],
             "prefs_loaded": spec["prefs_loaded"],
-            "real": [[int(point.ts), float(point.mgdl)] for point in trace.entries],
+            "real": [
+                [int(point.ts), float(point.mgdl)] for point in trace.entries
+                if trace.window_start <= point.ts <= trace.window_end
+            ],
+            "real_insulin": _real_insulin(trace)["events"],
         })
         results = []
         for index, variant in enumerate(variants):
@@ -476,7 +513,11 @@ def whatif_run(spec: dict, channel: "queue.Queue[dict]") -> None:
                 "metrics": _variant_metrics(spec, result),
                 "warnings": list(result.warnings),
             })
-        channel.put({"type": "done", "results": results})
+        channel.put({
+            "type": "done",
+            "results": results,
+            "real": _real_insulin(trace),
+        })
     except Exception as exc:
         channel.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"[-500:]})
 

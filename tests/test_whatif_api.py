@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import server.live as live
-from nightscout.trace import build_trace
+from nightscout.trace import Treatment, build_trace
 from nightscout_stub import StubNightscout
 from runner.replay_loop import ReplayCycle, ReplayResult, ReplayVariant
 
@@ -143,6 +143,26 @@ def test_variant_metrics_integrate_basal_over_cycle_deltas():
     metrics = live._variant_metrics(spec, result)
     assert metrics["basal_units"] == 0.5
     assert metrics["total_units"] == 0.5
+
+
+def test_real_insulin_separates_manual_boluses_from_loop_smbs():
+    trace = make_trace()
+    trace.treatments.extend([
+        Treatment(ts=T0 + 5 * MIN, kind="bolus", amount=2.0, origin="manual"),
+        Treatment(ts=T0 + 6 * MIN, kind="bolus", amount=0.3, origin="loop"),
+        Treatment(ts=T0 + 7 * MIN, kind="bolus", amount=0.2, origin="unknown"),
+        Treatment(ts=T0 - 60 * MIN, kind="bolus", amount=5.0, origin="manual"),
+    ])
+    real = live._real_insulin(trace)
+    assert real["manual_units"] == 2.2
+    assert real["manual_count"] == 2
+    assert real["smb_units"] == 0.3
+    assert real["smb_count"] == 1
+    assert real["events"] == [
+        [T0 + 5 * MIN, 2.0, "NORMAL"],
+        [T0 + 6 * MIN, 0.3, "SMB"],
+        [T0 + 7 * MIN, 0.2, "NORMAL"],
+    ]
 
 
 def test_import_builds_trace_and_hides_network_secrets():

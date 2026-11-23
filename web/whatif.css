@@ -232,6 +232,7 @@ button.ghost {
 .variant-details[open] summary { margin-bottom: 2px; }
 
 .legend .dot.real { background: var(--cgm); }
+.legend .dot.bolus { background: #90a4ae; opacity: .75; }
 .legend .dot.iob { background: var(--iob); }
 .legend .dash.model {
   width: 16px;

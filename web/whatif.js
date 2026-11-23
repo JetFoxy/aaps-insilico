@@ -4,6 +4,7 @@
   const el = (id) => document.getElementById(id);
   const t = (key, vars) => window.t(key, vars);
   const REAL_COLOR = "#4fc3f7";
+  const REAL_BOLUS_COLOR = "#90a4ae";
   const VARIANT_COLORS = ["#ffb74d", "#ce93d8", "#81c784", "#f06292"];
   const PREF_KEYS = [
     "bgAccel_ISF_weight", "bgBrake_ISF_weight", "lower_ISFrange_weight",
@@ -52,6 +53,8 @@
     drawQueued: false,
     realSeries: null,
     realTrace: null,
+    realInsulin: [],
+    real: null,
     statuses: {},
   };
 
@@ -572,6 +575,10 @@
       };
       state.series = (frame.variants || []).map(() => []);
       state.results = null;
+      state.real = null;
+      state.realInsulin = Array.isArray(frame.real_insulin)
+        ? frame.real_insulin.map((event) => [Number(event[0]), Number(event[1]), String(event[2])])
+        : [];
       if (Array.isArray(frame.real) && frame.real.length) {
         state.realSeries = frame.real.map((point) => [Number(point[0]), Number(point[1])]);
         state.realTrace = state.traceId;
@@ -613,6 +620,7 @@
     }
     if (frame.type === "done") {
       state.results = frame.results || [];
+      state.real = frame.real || null;
       if (state.run && state.run.mode === "replay" && state.series[0]?.length && !state.realSeries) {
         state.realSeries = state.series[0].map((cycle) => [cycle.ts, cycle.glucose]);
         state.realTrace = state.traceId;
@@ -667,7 +675,7 @@
     const model = state.run?.mode === "model";
     const columns = [
       "variant", "algorithm", "smb", "cycles", "smbUnits", "smbCount",
-      "basal", "total", "iobMean",
+      "manual", "basal", "total", "iobMean",
     ];
     if (model) {
       columns.push("mean", "tir", "tbr", "tbr54", "lbgi", "offset", "subject", "confidence");
@@ -682,45 +690,70 @@
     });
     head.appendChild(header);
 
+    const addCell = (row, content, cls) => {
+      const cell = document.createElement("td");
+      if (cls) cell.className = cls;
+      cell.textContent = content;
+      row.appendChild(cell);
+      return cell;
+    };
+    const labelCell = (row, text, dot) => {
+      const cell = document.createElement("td");
+      if (dot) {
+        const swatch = document.createElement("i");
+        swatch.className = "swatch";
+        swatch.style.background = dot;
+        cell.append(swatch);
+      }
+      const label = document.createElement("span");
+      label.textContent = text;
+      cell.append(label);
+      row.appendChild(cell);
+    };
+
+    if (state.real) {
+      const real = state.real;
+      const row = document.createElement("tr");
+      row.className = "real-row";
+      labelCell(row, t("whatif.metrics.realDay"));
+      addCell(row, t("whatif.metrics.na"));
+      addCell(row, t("whatif.metrics.na"));
+      addCell(row, t("whatif.metrics.na"));
+      addCell(row, fmt(real.smb_units, 2));
+      addCell(row, fmt(real.smb_count, 0));
+      addCell(row, fmt(real.manual_units, 2));
+      addCell(row, t("whatif.metrics.na"));
+      addCell(row, fmt(Number(real.manual_units) + Number(real.smb_units), 2));
+      addCell(row, t("whatif.metrics.na"));
+      columns.slice(10).forEach(() => addCell(row, t("whatif.metrics.na")));
+      body.appendChild(row);
+    }
+
     state.results.forEach((result, index) => {
       const metrics = result.metrics || {};
       const match = metrics.match || {};
       const row = document.createElement("tr");
-      const add = (content, cls) => {
-        const cell = document.createElement("td");
-        if (cls) cell.className = cls;
-        cell.textContent = content;
-        row.appendChild(cell);
-        return cell;
-      };
-      const variantCell = document.createElement("td");
-      const dot = document.createElement("i");
-      dot.className = "swatch";
-      dot.style.background = color(index);
-      const label = document.createElement("span");
-      label.textContent = result.label;
-      variantCell.append(dot, label);
-      row.appendChild(variantCell);
-
-      add(t(`whatif.algorithm.${result.algorithm}`));
-      add(result.smb ? t("whatif.metrics.on") : t("whatif.metrics.off"));
-      add(fmt(metrics.cycles, 0));
-      add(fmt(metrics.smb_units, 2));
-      add(fmt(metrics.smb_count, 0));
-      add(fmt(metrics.basal_units, 2));
-      add(fmt(metrics.total_units, 2));
-      add(fmt(metrics.iob_mean, 2));
+      labelCell(row, result.label, color(index));
+      addCell(row, t(`whatif.algorithm.${result.algorithm}`));
+      addCell(row, result.smb ? t("whatif.metrics.on") : t("whatif.metrics.off"));
+      addCell(row, fmt(metrics.cycles, 0));
+      addCell(row, fmt(metrics.smb_units, 2));
+      addCell(row, fmt(metrics.smb_count, 0));
+      addCell(row, fmt(metrics.manual_units, 2));
+      addCell(row, fmt(metrics.basal_units, 2));
+      addCell(row, fmt(metrics.total_units, 2));
+      addCell(row, fmt(metrics.iob_mean, 2));
       if (model) {
-        add(fmt(metrics.mean_glucose, 1));
-        add(pct(metrics.tir_70_180), metrics.tir_70_180 >= 0.7 ? "ok" : "");
-        add(pct(metrics.tbr_70), metrics.tbr_70 > 0.04 ? "bad" : "");
-        add(pct(metrics.tbr_54), metrics.tbr_54 > 0.01 ? "bad" : "");
-        add(fmt(metrics.lbgi, 2));
-        add(fmt(metrics.glucose_offset, 1));
-        add(match.subject_name || t("whatif.metrics.na"));
-        add(confidenceLabel(match.confidence));
+        addCell(row, fmt(metrics.mean_glucose, 1));
+        addCell(row, pct(metrics.tir_70_180), metrics.tir_70_180 >= 0.7 ? "ok" : "");
+        addCell(row, pct(metrics.tbr_70), metrics.tbr_70 > 0.04 ? "bad" : "");
+        addCell(row, pct(metrics.tbr_54), metrics.tbr_54 > 0.01 ? "bad" : "");
+        addCell(row, fmt(metrics.lbgi, 2));
+        addCell(row, fmt(metrics.glucose_offset, 1));
+        addCell(row, match.subject_name || t("whatif.metrics.na"));
+        addCell(row, confidenceLabel(match.confidence));
       } else {
-        add(fmt(metrics.skipped_cycles, 0));
+        addCell(row, fmt(metrics.skipped_cycles, 0));
       }
       body.appendChild(row);
     });
@@ -828,6 +861,12 @@
       { length: insulinBuckets },
       () => ({ basal: 0, smb: 0 }),
     ));
+    const realBuckets = Array.from({ length: insulinBuckets }, () => 0);
+    state.realInsulin.forEach((event) => {
+      const bucket = Math.floor((Number(event[0]) - start) / 3_600_000);
+      if (bucket < 0 || bucket >= insulinBuckets) return;
+      realBuckets[bucket] += Number(event[1]) || 0;
+    });
     state.series.forEach((series, index) => series.forEach((cycle, cycleIndex) => {
       const bucket = Math.floor((Number(cycle.ts) - start) / 3_600_000);
       if (bucket < 0 || bucket >= insulinBuckets) return;
@@ -846,6 +885,9 @@
     buckets.forEach((variant) => variant.forEach((bucket) => {
       insulinMax = Math.max(insulinMax, bucket.basal + bucket.smb);
     }));
+    realBuckets.forEach((units) => {
+      insulinMax = Math.max(insulinMax, units);
+    });
     insulinMax = Math.ceil(insulinMax);
     const yI = (value) => iBottom - (value / insulinMax) * (iBottom - iTop);
 
@@ -899,10 +941,19 @@
     }
 
     const groupWidth = plotW / insulinBuckets;
-    const barWidth = Math.max(1, (groupWidth * 0.86) / state.series.length);
+    const realBars = state.realInsulin.length > 0;
+    const barSlots = state.series.length + (realBars ? 1 : 0);
+    const barWidth = Math.max(1, (groupWidth * 0.86) / Math.max(1, barSlots));
+    realBuckets.forEach((units, bucketIndex) => {
+      if (units <= 0) return;
+      const base = padL + bucketIndex * groupWidth + groupWidth * 0.07;
+      const top = yI(units);
+      parts.push(`<rect x="${base.toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(1, barWidth - 1).toFixed(1)}" height="${(iBottom - top).toFixed(1)}" fill="${REAL_BOLUS_COLOR}" opacity="0.55"/>`);
+    });
     buckets.forEach((variant, index) => {
+      const offset = (index + (realBars ? 1 : 0)) * barWidth;
       variant.forEach((bucket, bucketIndex) => {
-        const base = padL + bucketIndex * groupWidth + groupWidth * 0.07 + index * barWidth;
+        const base = padL + bucketIndex * groupWidth + groupWidth * 0.07 + offset;
         const total = bucket.basal + bucket.smb;
         if (total > 0) {
           const top = yI(total);
