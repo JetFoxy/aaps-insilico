@@ -188,6 +188,16 @@ def _verdict(stats: dict[str, dict], decisions: list[DecisionRecord]) -> tuple[b
     return False, "; ".join(parts)
 
 
+def _profile_switch_counts(trace: DayTrace) -> tuple[int, int]:
+    switches = [
+        treatment for treatment in trace.treatments if treatment.kind == "profile_switch"
+    ]
+    with_json = sum(
+        1 for treatment in switches if treatment.meta.get("profileJson")
+    )
+    return len(switches), with_json
+
+
 def _format_error(value: float | None) -> str:
     if value is None:
         return "—"
@@ -278,7 +288,9 @@ def _render(
         f"- пропущено из-за пропуска CGM (`skipped`): {stats['skipped']['n']};",
         f"- исключено loop-болюсов (SMB из записи): {counts.get('excluded loop boluses', 0)};",
         f"- неклассифицированных болюсов: {counts.get('unclassified boluses', 0)};",
-        f"- циклов без решения моста: {counts.get('cycles without a decision', 0)}.",
+        f"- циклов без решения моста: {counts.get('cycles without a decision', 0)};",
+        f"- смен профиля в трейсе: {_profile_switch_counts(trace)[0]}, "
+        f"из них с `profileJson`: {_profile_switch_counts(trace)[1]}.",
         "",
         "## 5. Вывод",
         "",
@@ -330,7 +342,8 @@ def _render(
         "4. Temp target реконструируется из лечений; exercise и неизвестные события не "
         "воспроизводятся.",
         "5. Смена профиля применяется на своём времени: `profileJson` и процент из "
-        "`profile switch`, плюс сегменты профиля Nightscout.",
+        "`profile switch`, плюс сегменты профиля Nightscout. Если в трейсе нет "
+        "`profileJson`, переключение не применяется; счётчик — в §4.",
         "6. Числа в отчёте агрегированные: значения глюкозы, время приёмов пищи и параметры "
         "инсулина не публикуются.",
         "7. Шаг replay следует записанным `deliverAt`; 5-минутная сетка остаётся запасным "
