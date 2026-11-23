@@ -38,6 +38,7 @@ class Scenario:
     name: str = "basal"
     duration_min: int = 24 * 60
     meals: list[tuple[float, float]] = field(default_factory=list)  # (minute, grams)
+    boluses: list[tuple[float, float]] = field(default_factory=list)  # (minute, units)
     meal_mode: str = "fcl"  # "fcl" | "announced"
     exercise: ExerciseSession | None = None
     suspend: tuple[float, float] | None = None  # (start_min, duration_min)
@@ -80,6 +81,12 @@ def init_bridge(bridge, subject: Subject, prefs: dict, insulin: dict, profile: A
             treatments.append({
                 "kind": "carbs", "ts": EPOCH0_MS + int(max(0.0, announced_min) * 60_000),
                 "amount": announced_grams, "duration": 0,
+            })
+    for time_min, units in scenario.boluses:
+        if time_min < 0:
+            treatments.append({
+                "kind": "bolus", "ts": EPOCH0_MS + int(round(time_min * 60_000)),
+                "amount": units, "type": "NORMAL", "isValid": True,
             })
     bridge.request({
         "cmd": "init", "prefs": prefs, "profiles": [], "insulin": insulin,
@@ -178,6 +185,19 @@ def run_closed_loop(
             si_multipliers=scenario.si_multipliers, dawn_egp=scenario.dawn_egp,
         )
         boluses = []
+        for time_min, units in scenario.boluses:
+            if not t0 <= time_min < t1:
+                continue
+            boluses.append(Bolus(
+                time=max(0.0, time_min - t0), units=units,
+                duration=pump.config.bolus_duration_min,
+            ))
+            result.bolus_units_to_model += units
+            result.dose_events.append((t1, units, "manual"))
+            applied_boluses.append({
+                "kind": "bolus", "ts": EPOCH0_MS + int(round(time_min * 60_000)),
+                "amount": units, "type": "NORMAL", "isValid": True,
+            })
         still_pending: list[tuple[float, float]] = []
         for deliver_at, units in pending_boluses:
             if deliver_at < t1:
