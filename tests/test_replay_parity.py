@@ -119,6 +119,38 @@ def test_verdict_fails_when_a_factor_diverges_despite_main_fields():
     assert "factor:acceIsf" in reason
 
 
+def test_parity_counts_only_in_window_decisions():
+    from golden.check_replay_parity import _in_window_decisions
+    from nightscout.trace import DayTrace
+
+    trace = DayTrace(
+        window_start=T0,
+        window_end=T0 + 3_600_000,
+        decisions=[
+            decision(T0 - 60_000),
+            decision(T0 + 300_000),
+            decision(T0 + 3_600_000),
+            decision(T0 + 3_660_000),
+        ],
+    )
+    in_window = _in_window_decisions(trace)
+    assert [record.deliver_at for record in in_window] == [T0 + 300_000, T0 + 3_600_000]
+
+
+def test_derived_iob_threshold_does_not_change_the_verdict():
+    from golden.check_replay_parity import _verdict
+    replay = ReplayResult(
+        ReplayVariant(label="A"), [cycle(T0, acce=1.0)], [], []
+    )
+    replay.cycles[0].factors["iobThEffective"] = 10.2
+    record = decision(T0, acce=1.0)
+    record.factors["iobThEffective"] = 4.5
+    stats = compare(replay, [record])
+    assert stats["factor:iobThEffective"]["match"] == 0.0
+    passed, reason = _verdict(stats, [record])
+    assert passed is True, reason
+
+
 def test_verdict_ignores_a_field_without_ground_truth():
     from golden.check_replay_parity import _verdict
     decisions = [decision(T0 + i * 300_000) for i in range(20)]

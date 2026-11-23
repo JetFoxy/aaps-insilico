@@ -24,6 +24,7 @@ from runner.replay_loop import (
 ROOT = Path(__file__).resolve().parents[2]
 MATCH_WINDOW_MS = 60_000
 MAIN_FIELDS = ("final_isf", "insulin_req", "rate", "smb_on")
+INFORMATIONAL_FIELDS = frozenset({"factor:iobThEffective"})
 
 DEFAULT_TOLERANCES = {
     "final_isf": 0.01,
@@ -167,7 +168,10 @@ def _verdict(stats: dict[str, dict], decisions: list[DecisionRecord]) -> tuple[b
     failures = [
         name
         for name, row in stats.items()
-        if name not in ("unmatched", "skipped") and row["n"] > 0 and row["match"] < 1.0
+        if name not in ("unmatched", "skipped")
+        and name not in INFORMATIONAL_FIELDS
+        and row["n"] > 0
+        and row["match"] < 1.0
     ]
     parts: list[str] = []
     if coverage < 0.95:
@@ -194,12 +198,20 @@ def _format_tolerance(name: str, tolerance: float) -> str:
     return "точно" if name == "smb_on" or tolerance == 0.0 else f"{tolerance:g}"
 
 
+def _in_window_decisions(trace: DayTrace) -> list[DecisionRecord]:
+    return [
+        decision for decision in trace.decisions
+        if trace.window_start <= decision.deliver_at <= trace.window_end
+    ]
+
+
 def _render(
     trace: DayTrace,
     decisions: list[DecisionRecord],
     replay: ReplayResult,
     stats: dict[str, dict],
     tolerances: dict[str, float],
+    lookback: int = 0,
 ) -> str:
     passed, reason = _verdict(stats, decisions)
     counts = _warning_counts(replay.warnings)
@@ -222,7 +234,9 @@ def _render(
         "## 2. Метод сверки",
         "",
         "1. Трейс импортируется из Nightscout (W1): сырые точки CGM, лечения, профиль, "
-        "записи решений.",
+        "записи решений."
+        + (" Импорт включает 8-часовой lookback до `window_start`; решения lookback "
+           "не входят в знаменатель покрытия." if lookback else ""),
         "2. Baseline-вариант собирается из настроек стенда и профиля Nightscout; точки решения "
         "берутся из записанных `deliverAt` (5-минутная сетка — только если решений в трейсе "
         "нет), глюкоза не пересчитывается.",
@@ -235,6 +249,9 @@ def _render(
         "ответа моста, а не с `sens` (mg/dL/U).",
         "6. Записи, где у поля нет эталона (`None`), в знаменатель `n` этого поля не входят: "
         "доля считается только по записям с ground truth.",
+        "7. `factor:iobThEffective` — производное значение моста (`max_iob` × порог IOB), "
+        "а не динамический ограничитель AAPS; оно показывается для информации и в вердикт "
+        "не входит.",
         "",
         "## 3. Результаты",
         "",
@@ -250,10 +267,13 @@ def _render(
         )
     lines += [
         "",
+        "`factor:iobThEffective` — производное значение моста, в вердикт не входит.",
+        "",
         "## 4. Исключённые циклы",
         "",
         f"- сопоставлено пар «решение — цикл»: "
         f"{_matched_pairs(stats, decisions)} из {len(decisions)};",
+        f"- решений вне окна (lookback) исключено: {lookback};",
         f"- без пары по времени (`unmatched`): {stats['unmatched']['n']};",
         f"- пропущено из-за пропуска CGM (`skipped`): {stats['skipped']['n']};",
         f"- исключено loop-болюсов (SMB из записи): {counts.get('excluded loop boluses', 0)};",
@@ -277,7 +297,8 @@ def _render(
             lines.append(
                 f"- Покрытие по `deliverAt` — {_matched_pairs(stats, decisions)} из "
                 f"{len(decisions)} ({coverage:.1%}) при требуемых 95%: у части решений нет "
-                "цикла replay в окне ±1 мин. Это ограничение сопоставления, а не допусков."
+                "цикла replay в окне ±1 мин. Это ограничение сопоставления, а не допусков; "
+                f"решения lookback ({lookback}) в знаменатель не входят."
             )
         if failed:
             detail = ", ".join(
@@ -289,7 +310,9 @@ def _render(
         weak_factors = [
             f"`{name}` {stats[name]['match']:.1%}"
             for name in stats
-            if name.startswith("factor:") and stats[name]["match"] < 0.5
+            if name.startswith("factor:")
+            and name not in INFORMATIONAL_FIELDS
+            and stats[name]["match"] < 0.5
         ]
         if weak_factors:
             lines.append(
@@ -306,7 +329,8 @@ def _render(
         "перечислены в §4.",
         "4. Temp target реконструируется из лечений; exercise и неизвестные события не "
         "воспроизводятся.",
-        "5. Смена профиля применяется только через сегменты профиля Nightscout.",
+        "5. Смена профиля применяется на своём времени: `profileJson` и процент из "
+        "`profile switch`, плюс сегменты профиля Nightscout.",
         "6. Числа в отчёте агрегированные: значения глюкозы, время приёмов пищи и параметры "
         "инсулина не публикуются.",
         "7. Шаг replay следует записанным `deliverAt`; 5-минутная сетка остаётся запасным "
@@ -355,10 +379,13 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, KeyError, ValueError, BridgeError) as exc:
         print(f"parity check failed: {exc}", file=sys.stderr)
         return 1
-    decisions = trace.decisions
+    decisions = _in_window_decisions(trace)
+    lookback = len(trace.decisions) - len(decisions)
     stats = compare(replay, decisions)
     passed, reason = _verdict(stats, decisions)
-    report = _render(trace, decisions, replay, stats, DEFAULT_TOLERANCES)
+    report = _render(
+        trace, decisions, replay, stats, DEFAULT_TOLERANCES, lookback=lookback
+    )
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -369,7 +396,8 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(replay_to_dict(replay), ensure_ascii=False, indent=2), encoding="utf-8"
     )
     summary = {
-        "decisions": len(trace.decisions),
+        "decisions": len(decisions),
+        "lookback": lookback,
         "matched": _matched_pairs(stats, decisions),
         "unmatched": stats["unmatched"]["n"],
         "skipped": stats["skipped"]["n"],
@@ -377,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
         "passed": passed,
     }
     print(json.dumps(summary, ensure_ascii=False))
-    return 0
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
