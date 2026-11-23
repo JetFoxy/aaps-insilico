@@ -33,7 +33,10 @@ class AutoIsfRunner(
                 "isAutosensModeEnabled" -> ConstraintObject(false, logger)
                 "isUAMEnabled" -> ConstraintObject(true, logger)
                 "isSMBModeEnabled" -> ConstraintObject(true, logger)
-                "getMaxIOBAllowed" -> ConstraintObject(12.0, logger)
+                "getMaxIOBAllowed" -> ConstraintObject(
+                    preferences.get(app.aaps.core.keys.DoubleKey.ApsSmbMaxIob),
+                    logger,
+                )
                 "getMaxBasalAllowed" -> ConstraintObject(4.0, logger)
                 "toString" -> "ConstraintsCheckerStub"
                 else -> defaultValue(method.returnType)
@@ -92,7 +95,21 @@ class AutoIsfRunner(
     fun autoIsf(now: Long, profile: Profile, tempTarget: TT?): Double {
         clock.now = now
         activeTempTarget = tempTarget
-        return runBlocking { plugin.autoISF(profile) }
+        val sens = runBlocking { plugin.autoISF(profile) }
+        aivField().iobThEffective = effectiveIobThreshold()
+        return sens
+    }
+
+    private fun effectiveIobThreshold(): Double {
+        val maxIob = runBlocking { constraintsChecker.getMaxIOBAllowed() }.value()
+        val percent = preferences.get(app.aaps.core.keys.IntKey.ApsAutoIsfIobThPercent)
+        return if (percent >= 100) maxIob else percent / 100.0 * maxIob
+    }
+
+    private fun aivField(): AIV {
+        val field = OpenAPSAutoISFPlugin::class.java.getDeclaredField("autoIsfValues")
+        field.isAccessible = true
+        return field.get(plugin) as AIV
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -103,9 +120,7 @@ class AutoIsfRunner(
     }
 
     fun aiv(): Map<String, Double> {
-        val field = OpenAPSAutoISFPlugin::class.java.getDeclaredField("autoIsfValues")
-        field.isAccessible = true
-        val aiv = field.get(plugin) as AIV
+        val aiv = aivField()
         return mapOf(
             "acceIsf" to aiv.acceIsf, "bgIsf" to aiv.bgIsf, "ppIsf" to aiv.ppIsf,
             "duraIsf" to aiv.duraIsf, "finalIsf" to aiv.finalIsf, "iobThEffective" to aiv.iobThEffective,
