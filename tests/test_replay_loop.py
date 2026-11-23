@@ -83,7 +83,7 @@ def test_init_basal_follows_the_profile_schedule():
     assert any(rate == 1.4 for _, rate in blocks)
 
 
-def test_seed_history_excludes_smb_and_keeps_short_temp_duration():
+def test_seed_history_includes_pre_window_smb_and_keeps_short_temp_duration():
     trace = make_trace()
     trace.treatments.append(type(trace.treatments[0])(
         ts=T0 - 60 * MIN, kind="bolus", amount=0.9, duration_min=0.0, origin="loop"))
@@ -92,12 +92,24 @@ def test_seed_history_excludes_smb_and_keeps_short_temp_duration():
     bridge = FakeBridge()
     run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
     seeded = bridge.requests[0]["treatments"]
-    assert all(not (t["kind"] == "bolus" and t["amount"] == 0.9) for t in seeded)
+    smb = next(t for t in seeded if t["kind"] == "bolus")
+    assert smb["amount"] == 0.9
+    assert smb["type"] == "SMB"
     temp = next(t for t in seeded if t["kind"] == "temp")
     assert temp["rate"] == 1.4
     assert temp["duration"] == 6 * 60_000
     first_cycle = next(r for r in bridge.requests if r["cmd"] == "cycle")
     assert any(t["kind"] == "temp" and t["rate"] == 1.4 for t in first_cycle["treatments"])
+
+
+def test_seed_history_excludes_in_window_loop_boluses():
+    trace = make_trace()
+    trace.treatments.append(type(trace.treatments[0])(
+        ts=T0 + 5 * MIN, kind="bolus", amount=0.7, duration_min=0.0, origin="loop"))
+    bridge = FakeBridge()
+    run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    seeded = bridge.requests[0]["treatments"]
+    assert all(not (t["kind"] == "bolus" and t["amount"] == 0.7) for t in seeded)
 
 
 def test_replay_skips_cgm_gap_and_reports_it():

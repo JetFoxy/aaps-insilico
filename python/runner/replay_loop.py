@@ -115,7 +115,7 @@ def _real_treatment(treatment) -> dict | None:
 
 
 def _seed_history(trace, since_ms: int) -> list[dict]:
-    """Bridge-format treatments from the seed window; SMB boluses never come back."""
+    """Bridge-format treatments from the seed window, including its loop SMBs."""
     seeded: list[dict] = []
     for treatment in trace.treatments:
         if treatment.ts < since_ms or treatment.ts >= trace.window_start:
@@ -125,6 +125,15 @@ def _seed_history(trace, since_ms: int) -> list[dict]:
                 "kind": "temp", "ts": treatment.ts,
                 "duration": int(round(treatment.duration_min * 60_000)),
                 "rate": treatment.amount, "isAbsolute": True, "isValid": True,
+            })
+            continue
+        if treatment.kind == "bolus":
+            if treatment.amount <= 0:
+                continue
+            seeded.append({
+                "kind": "bolus", "ts": treatment.ts, "amount": treatment.amount,
+                "type": "SMB" if treatment.origin == "loop" else "NORMAL",
+                "isValid": True,
             })
             continue
         converted = _real_treatment(treatment)
