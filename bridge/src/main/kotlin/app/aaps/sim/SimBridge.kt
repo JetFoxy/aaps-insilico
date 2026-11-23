@@ -350,7 +350,16 @@ class Bridge {
             targetLow = request.num("targetLow", 100.0),
             targetHigh = request.num("targetHigh", 100.0),
         )
-        val data = CobRunner(preferences, dateUtil, logger, iobCalculator, profile, carbs).mealData(now)
+        val carbList = request.arr("treatments")?.mapNotNull { element ->
+            val treatment = element as? JsonObject ?: return@mapNotNull null
+            if (treatment.str("kind") != "carbs") return@mapNotNull null
+            app.aaps.core.data.model.CA(
+                timestamp = treatment.long("ts"),
+                duration = treatment.long("duration"),
+                amount = treatment.num("amount"),
+            )
+        }?.takeIf { it.isNotEmpty() }?.sortedBy { it.timestamp } ?: carbs
+        val data = CobRunner(preferences, dateUtil, logger, iobCalculator, profile, carbList).mealData(now)
         return buildJsonObject {
             put("carbs", data.carbs)
             put("mealCOB", data.mealCOB)
@@ -358,7 +367,7 @@ class Bridge {
             put("slopeFromMinDeviation", data.slopeFromMinDeviation)
             put("usedMinCarbsImpact", data.usedMinCarbsImpact)
             put("lastBolusTime", boluses.lastOrNull { it.timestamp <= now }?.timestamp ?: 0L)
-            put("lastCarbTime", carbs.lastOrNull { it.timestamp <= now }?.timestamp ?: 0L)
+            put("lastCarbTime", carbList.lastOrNull { it.timestamp <= now }?.timestamp ?: 0L)
         }
     }
 
