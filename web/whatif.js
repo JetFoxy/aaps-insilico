@@ -86,6 +86,11 @@
     });
   }
 
+  function confidenceLabel(value) {
+    if (value === "good" || value === "low") return t(`whatif.confidence.${value}`);
+    return value || t("whatif.metrics.na");
+  }
+
   function escapeXml(text) {
     return String(text)
       .replace(/&/g, "&amp;")
@@ -567,6 +572,10 @@
       };
       state.series = (frame.variants || []).map(() => []);
       state.results = null;
+      if (Array.isArray(frame.real) && frame.real.length) {
+        state.realSeries = frame.real.map((point) => [Number(point[0]), Number(point[1])]);
+        state.realTrace = state.traceId;
+      }
       const badge = el("results-badge");
       badge.textContent = t(
         frame.mode === "replay" ? "whatif.results.replay" : "whatif.results.model",
@@ -604,7 +613,7 @@
     }
     if (frame.type === "done") {
       state.results = frame.results || [];
-      if (state.run && state.run.mode === "replay" && state.series[0]?.length) {
+      if (state.run && state.run.mode === "replay" && state.series[0]?.length && !state.realSeries) {
         state.realSeries = state.series[0].map((cycle) => [cycle.ts, cycle.glucose]);
         state.realTrace = state.traceId;
       }
@@ -709,7 +718,7 @@
         add(fmt(metrics.lbgi, 2));
         add(fmt(metrics.glucose_offset, 1));
         add(match.subject_name || t("whatif.metrics.na"));
-        add(match.confidence || t("whatif.metrics.na"));
+        add(confidenceLabel(match.confidence));
       } else {
         add(fmt(metrics.skipped_cycles, 0));
       }
@@ -793,10 +802,14 @@
     state.series.forEach((series) => series.forEach((cycle) => {
       if (Number.isFinite(Number(cycle.glucose))) allGlucose.push(Number(cycle.glucose));
     }));
-    const realAvailable = !model
-      || (state.realSeries && state.realTrace === state.traceId);
-    const realSeries = model ? state.realSeries : state.series[0];
-    if (realSeries && realAvailable) {
+    const realAvailable = Boolean(
+      (state.realSeries && state.realTrace === state.traceId)
+      || (!model && state.series[0]?.length),
+    );
+    const realSeries = state.realSeries && state.realTrace === state.traceId
+      ? state.realSeries
+      : model ? null : state.series[0];
+    if (realSeries) {
       realSeries.forEach((point) => {
         const value = Array.isArray(point) ? Number(point[1]) : Number(point.glucose);
         if (Number.isFinite(value)) allGlucose.push(value);
@@ -863,7 +876,7 @@
         .join(" ");
     };
 
-    if (realSeries && realAvailable) {
+    if (realSeries) {
       const points = realSeries.map((point) => {
         const ts = Array.isArray(point) ? point[0] : point.ts;
         const value = Array.isArray(point) ? point[1] : point.glucose;

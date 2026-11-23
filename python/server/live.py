@@ -429,6 +429,7 @@ def whatif_run(spec: dict, channel: "queue.Queue[dict]") -> None:
             "variants": [variant.label for variant in variants],
             "cadence_min": spec["cadence_min"],
             "prefs_loaded": spec["prefs_loaded"],
+            "real": [[int(point.ts), float(point.mgdl)] for point in trace.entries],
         })
         results = []
         for index, variant in enumerate(variants):

@@ -240,6 +240,33 @@ def test_replay_streams_start_variant_cycle_done(monkeypatch):
     assert "tbr_70" not in metrics
 
 
+def test_start_frame_carries_the_real_cgm_series(monkeypatch):
+    trace_id = register("real-1")
+    monkeypatch.setattr(live, "Bridge", FakeBridge)
+    monkeypatch.setattr(live, "run_replay", lambda trace, prefs, insulin, variant, bridge, **kw: fake_cycles(variant))
+    server = start()
+    try:
+        run = fetch_json(server, "/api/whatif/run", "POST", {
+            "trace_id": trace_id,
+            "mode": "replay",
+            "variants": [{"label": "A", "algorithm": "autoisf", "smb": True}],
+            "options": {},
+        })
+        frames = read_stream(server, run["run_id"])
+    finally:
+        server.shutdown()
+        live.TRACES.pop(trace_id, None)
+        live.WHATIF_SETTINGS.pop(trace_id, None)
+    real = frames[0]["real"]
+    assert len(real) == 16
+    assert real[0] == [T0, 120.0]
+    assert real[-1] == [T0 + 30 * MIN, 150.0]
+    assert all(
+        isinstance(ts, int) and isinstance(mgdl, float)
+        for ts, mgdl in real
+    )
+
+
 def test_replay_run_requires_a_settings_export():
     trace_id = register("run-2", prefs_loaded=False)
     server = start()
