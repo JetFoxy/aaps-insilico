@@ -251,8 +251,11 @@ def _parse_entries(entries: list[dict], window_start: int, window_end: int) -> l
     return [by_date[ts] for ts in sorted(by_date)]
 
 
-def _parse_treatments(raw_treatments: list[dict]) -> tuple[list[Treatment], list[str]]:
+def _parse_treatments(
+    raw_treatments: list[dict], segments: list[ProfileSegment]
+) -> tuple[list[Treatment], list[str]]:
     parsed: list[Treatment] = []
+    warnings: list[str] = []
     unclassified = 0
     for raw in raw_treatments:
         if not isinstance(raw, dict):
@@ -296,12 +299,17 @@ def _parse_treatments(raw_treatments: list[dict]) -> tuple[list[Treatment], list
         elif event == "temporary target":
             bottom = _as_float(raw.get("targetBottom"))
             top = _as_float(raw.get("targetTop"))
+            units = str(raw.get("units") or "").strip() or _units_at(segments, ts)
+            factor = _unit_factor(units)
+            if factor is None:
+                factor = 1.0
+                warnings.append(f"temp target units unknown: {units or 'missing'}")
             if bottom is None and top is None:
                 meta: dict = {}
             else:
                 low = bottom if bottom is not None else top
                 high = top if top is not None else bottom
-                meta = {"low": float(low) * MGDL_PER_MMOL, "high": float(high) * MGDL_PER_MMOL}
+                meta = {"low": float(low) * factor, "high": float(high) * factor}
             parsed.append(
                 Treatment(ts=ts, kind="temp_target", duration_min=duration, meta=meta)
             )
@@ -312,8 +320,29 @@ def _parse_treatments(raw_treatments: list[dict]) -> tuple[list[Treatment], list
         else:
             parsed.append(Treatment(ts=ts, kind="note", origin="manual"))
     parsed.sort(key=lambda treatment: treatment.ts)
-    warnings = [f"unclassified bolus: {unclassified}"] if unclassified else []
+    if unclassified:
+        warnings.insert(0, f"unclassified bolus: {unclassified}")
     return parsed, warnings
+
+
+def _units_at(segments: list[ProfileSegment], ts: int) -> str:
+    if not segments:
+        return ""
+    active = segments[0]
+    for segment in segments:
+        if segment.start_ms > ts:
+            break
+        active = segment
+    return active.units
+
+
+def _unit_factor(units: str) -> float | None:
+    normalized = units.strip().lower().replace("/", "")
+    if normalized == "mmol":
+        return MGDL_PER_MMOL
+    if normalized == "mgdl":
+        return 1.0
+    return None
 
 
 def _parse_profiles(docs: list[dict], timezone: str | None) -> list[ProfileSegment]:
@@ -434,9 +463,9 @@ def build_trace(
     """Normalize raw Nightscout documents into a DayTrace for the import window."""
     warnings: list[str] = []
     points = _parse_entries(entries, window_start, window_end)
-    parsed_treatments, treatment_warnings = _parse_treatments(treatments)
-    warnings.extend(treatment_warnings)
     segments = _parse_profiles(profiles, timezone)
+    parsed_treatments, treatment_warnings = _parse_treatments(treatments, segments)
+    warnings.extend(treatment_warnings)
     if not segments:
         warnings.append("no profile")
     if not devicestatus:

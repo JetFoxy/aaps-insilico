@@ -78,3 +78,23 @@ def test_untyped_bolus_is_reported_not_guessed():
                         devicestatus=[], window_start=T0, window_end=T0 + 1)
     assert trace.treatments[0].origin == "unknown"
     assert any("unclassified" in w for w in trace.warnings)
+
+
+def test_temp_target_respects_record_units():
+    treatments = [{"eventType": "Temporary Target", "date": T0, "targetBottom": 100,
+                   "targetTop": 120, "duration": 30, "units": "mg/dL"}]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+                        treatments=treatments, profiles=[profile_doc(T0, 50.0, 10.0, 1.0)],
+                        devicestatus=[], window_start=T0, window_end=T0 + 1)
+    assert trace.active_temp_target(T0 + MIN) == (100.0, 120.0)
+
+
+def test_temp_target_unknown_units_are_not_guessed():
+    treatments = [{"eventType": "Temporary Target", "date": T0, "targetBottom": 5.0,
+                   "targetTop": 6.0, "duration": 30, "units": "banana"}]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+                        treatments=treatments, profiles=[profile_doc(T0, 50.0, 10.0, 1.0)],
+                        devicestatus=[], window_start=T0, window_end=T0 + 1)
+    assert trace.active_temp_target(T0 + MIN) == (5.0, 6.0)
+    assert any("temp target" in w for w in trace.warnings)
+
