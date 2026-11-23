@@ -64,6 +64,25 @@ def test_replay_passes_targets_autosens_and_keeps_own_smb():
                for t in cycles[1]["treatments"])
 
 
+def test_init_basal_follows_the_profile_schedule():
+    trace = make_trace()
+    trace.profiles[0] = type(trace.profiles[0])(
+        start_ms=trace.profiles[0].start_ms,
+        basal=[(0, 0.8), (360, 1.4)],
+        sens=trace.profiles[0].sens,
+        carb_ratio=trace.profiles[0].carb_ratio,
+        target_low=trace.profiles[0].target_low,
+        target_high=trace.profiles[0].target_high,
+        units=trace.profiles[0].units,
+        timezone=trace.profiles[0].timezone,
+    )
+    bridge = FakeBridge()
+    run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    blocks = bridge.requests[0]["basal"]
+    assert len(blocks) >= 2
+    assert any(rate == 1.4 for _, rate in blocks)
+
+
 def test_seed_history_excludes_smb_and_keeps_short_temp_duration():
     trace = make_trace()
     trace.treatments.append(type(trace.treatments[0])(

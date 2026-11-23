@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 CGM_GAP_MS = 15 * 60_000
 
@@ -172,6 +174,51 @@ def _current_temp(journal: list[dict], now: int) -> dict:
     }
 
 
+def _zone(timezone: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone) if timezone else UTC
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def _local_date(ts: int, timezone: str) -> date:
+    return datetime.fromtimestamp(ts / 1000, tz=_zone(timezone)).date()
+
+
+def _local_minute_ms(day: date, minute: int, timezone: str) -> int:
+    zone = _zone(timezone)
+    days, remainder = divmod(minute, 1440)
+    midnight = datetime.combine(
+        day + timedelta(days=days), time(0, 0, tzinfo=zone)
+    )
+    return int((midnight + timedelta(minutes=remainder)).timestamp() * 1000)
+
+
+def _basal_schedule(trace, basal_at_start: float) -> list[list[int | float]]:
+    """Bridge basal timeline: the window-start baseline plus profile breakpoints."""
+    blocks: dict[int, float] = {trace.window_start: basal_at_start}
+    for index, segment in enumerate(trace.profiles):
+        if not segment.basal:
+            continue
+        active_end = (
+            trace.profiles[index + 1].start_ms
+            if index + 1 < len(trace.profiles)
+            else None
+        )
+        day = _local_date(trace.window_start, segment.timezone)
+        last_day = _local_date(trace.window_end, segment.timezone)
+        while day <= last_day:
+            for minute, rate in segment.basal:
+                ts = _local_minute_ms(day, minute, segment.timezone)
+                if ts < segment.start_ms:
+                    continue
+                if active_end is not None and ts >= active_end:
+                    continue
+                blocks[ts] = rate
+            day += timedelta(days=1)
+    return [[ts, blocks[ts]] for ts in sorted(blocks)]
+
+
 def _total_daily_dose(trace, basal: float) -> float:
     hours = (trace.window_end - trace.window_start) / 3_600_000
     manual = sum(
@@ -227,7 +274,7 @@ def run_replay(
         "profiles": [],
         "insulin": insulin,
         "treatments": seeded,
-        "basal": [[trace.window_start, start_values["basal"]]],
+        "basal": _basal_schedule(trace, start_values["basal"]),
         "timezone": trace.timezone,
     })
     journal = list(seeded)
