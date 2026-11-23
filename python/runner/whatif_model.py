@@ -20,6 +20,7 @@ from runner.metrics import compute_metrics
 from runner.replay_loop import (
     ReplayCycle,
     ReplayVariant,
+    _bolus_increment,
     _effective_profile,
     _pref,
     _pref_int,
@@ -221,7 +222,8 @@ def build_algorithm_profile(
         max_basal=_pref(prefs, "openapsma_max_basal", 4.0),
         current_basal=values["basal"],
         smb_interval=_pref_int(prefs, "smbinterval", 3),
-        bolus_increment=_pref(prefs, "bolus_increment", 0.05),
+        bolus_increment=_bolus_increment(prefs)[0],
+        iob_threshold_percent=_pref_int(prefs, "iob_threshold_percent", 100),
         enable_auto_isf=variant.algorithm == "autoisf",
         smb_ratio_3min=_pref(prefs, "openapsama_smb_delivery_ratio", 0.5),
         algorithm=variant.algorithm,
@@ -294,6 +296,8 @@ def run_model(
     )
     start = int(round(warmup / CADENCE_MIN))
     warnings: list[str] = []
+    if _bolus_increment(prefs_effective)[1]:
+        warnings.append("bolus_increment missing from settings: using 0.05 U")
     real = _real_glucose_at(trace, trace.window_start)
     if real is None:
         offset = 0.0

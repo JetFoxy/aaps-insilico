@@ -204,6 +204,23 @@ def test_replay_uses_the_profile_active_after_a_switch():
     assert after["isf"] == 180.0
 
 
+def test_replay_reads_iob_threshold_and_button_increment_from_settings():
+    trace = make_trace()
+    bridge = FakeBridge()
+    prefs = {"iob_threshold_percent": "85", "insulin_button_increment_1": "0.5"}
+    run_replay(trace, prefs, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    cycle = next(r for r in bridge.requests if r["cmd"] == "cycle")
+    assert cycle["input"]["iobThresholdPercent"] == 85
+    assert cycle["input"]["profile"]["bolus_increment"] == 0.5
+
+
+def test_replay_reports_the_bolus_increment_default():
+    trace = make_trace()
+    bridge = FakeBridge()
+    result = run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    assert any("bolus_increment" in warning for warning in result.warnings)
+
+
 def test_smb_off_disables_micro_bolus():
     trace = make_trace()
     bridge = FakeBridge()

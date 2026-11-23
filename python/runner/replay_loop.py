@@ -62,6 +62,14 @@ def _pref_int(prefs: dict, key: str, default: int) -> int:
     return int(round(_pref(prefs, key, float(default))))
 
 
+def _bolus_increment(prefs: dict) -> tuple[float, bool]:
+    for key in ("bolus_increment", "insulin_button_increment_1"):
+        value = _float(prefs.get(key))
+        if value is not None and value > 0:
+            return value, False
+    return 0.05, True
+
+
 def _override(overrides: dict, *keys: str) -> float | None:
     for key in keys:
         if key in overrides:
@@ -290,6 +298,9 @@ def run_replay(
     })
     journal = list(seeded)
     result = ReplayResult(variant=variant)
+    bolus_increment, increment_defaulted = _bolus_increment(prefs_effective)
+    if increment_defaulted:
+        result.warnings.append("bolus_increment missing from settings: using 0.05 U")
     in_window = sorted(
         (
             treatment for treatment in trace.treatments
@@ -384,7 +395,7 @@ def run_replay(
                     "max_iob": _pref(prefs_effective, "openapsmb_max_iob", 12.0),
                     "max_basal": _pref(prefs_effective, "openapsma_max_basal", 4.0),
                     "SMBInterval": _pref_int(prefs_effective, "smbinterval", 3),
-                    "bolus_increment": _pref(prefs_effective, "bolus_increment", 0.05),
+                    "bolus_increment": bolus_increment,
                     "enable_autoISF": auto_isf_mode,
                     "out_units": "mg/dl",
                     "temptargetSet": temptarget_set,
@@ -400,7 +411,9 @@ def run_replay(
                     prefs_effective, "openapsama_smb_delivery_ratio", 0.5
                 ),
                 "smbMaxRangeExtension": 1.0,
-                "iobThresholdPercent": 100,
+                "iobThresholdPercent": _pref_int(
+                    prefs_effective, "iob_threshold_percent", 100
+                ),
                 "profilePercentage": 100,
                 "activityConsoleLog": "",
             },

@@ -27,6 +27,7 @@ class AlgorithmProfile:
     current_basal: float = 0.0
     smb_interval: int = 3
     bolus_increment: float = 0.05
+    iob_threshold_percent: int = 100
     enable_auto_isf: bool = False
     smb_ratio_3min: float = 0.3
     algorithm: str = "autoisf"
@@ -293,7 +294,7 @@ def run_closed_loop(
                 "loopWantedSmb": "AAPS",
                 "smbRatio": smb_ratio_for_cadence(active_profile, cadence_min),
                 "smbMaxRangeExtension": 1.0,
-                "iobThresholdPercent": 100,
+                "iobThresholdPercent": active_profile.iob_threshold_percent,
                 "profilePercentage": 100,
                 "activityConsoleLog": "",
             },
