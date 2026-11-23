@@ -396,6 +396,7 @@ class Bridge {
             put("sens", sens)
             put("status", status?.toJson() ?: JsonNull)
             put("console", buildJsonArray { autoIsf.console().forEach { add(JsonPrimitive(it)) } })
+            put("aiv", buildJsonObject { autoIsf.aiv().forEach { (k, v) -> put(k, JsonPrimitive(v)) } })
         }
     }
 

@@ -1,5 +1,6 @@
 package app.aaps.sim
 
+import app.aaps.core.data.model.AIV
 import app.aaps.core.data.model.TT
 import app.aaps.core.interfaces.aps.APSResult
 import app.aaps.core.interfaces.constraints.Constraint
@@ -99,5 +100,15 @@ class AutoIsfRunner(
         val field = OpenAPSAutoISFPlugin::class.java.getDeclaredField("consoleError")
         field.isAccessible = true
         return (field.get(plugin) as MutableList<String>).toList()
+    }
+
+    fun aiv(): Map<String, Double> {
+        val field = OpenAPSAutoISFPlugin::class.java.getDeclaredField("autoIsfValues")
+        field.isAccessible = true
+        val aiv = field.get(plugin) as AIV
+        return mapOf(
+            "acceIsf" to aiv.acceIsf, "bgIsf" to aiv.bgIsf, "ppIsf" to aiv.ppIsf,
+            "duraIsf" to aiv.duraIsf, "finalIsf" to aiv.finalIsf, "iobThEffective" to aiv.iobThEffective,
+        )
     }
 }
