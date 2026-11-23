@@ -67,6 +67,28 @@ def test_trace_scenario_uses_real_meals_and_warmup():
     assert scenario.meal_mode == "announced"
 
 
+def test_trace_scenario_includes_pre_window_loop_boluses_only():
+    from nightscout.trace import build_trace
+    T0 = 1_790_000_000_000
+    treatments = [
+        {"eventType": "Correction Bolus", "date": T0 - 60 * 60_000, "insulin": 3.0, "type": "NORMAL"},
+        {"eventType": "Correction Bolus", "date": T0 - 30 * 60_000, "insulin": 1.0, "type": "SMB"},
+        {"eventType": "Correction Bolus", "date": T0 + 30 * 60_000, "insulin": 2.0, "type": "SMB"},
+    ]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 120}],
+                        treatments=treatments,
+                        profiles=[{"startDate": T0 - 86_400_000, "defaultProfile": "Main",
+                                   "store": {"Main": {"units": "mg/dL", "timezone": "UTC",
+                                                      "sens": [{"time": "00:00", "value": 50.0}],
+                                                      "carbratio": [{"time": "00:00", "value": 10.0}],
+                                                      "basal": [{"time": "00:00", "value": 1.0}],
+                                                      "target_low": [{"time": "00:00", "value": 100.0}],
+                                                      "target_high": [{"time": "00:00", "value": 120.0}]}}}],
+                        devicestatus=[], window_start=T0, window_end=T0 + 2 * 3600_000)
+    scenario = trace_scenario(trace, warmup_hours=8.0)
+    assert scenario.boluses == [(7 * 60, 3.0), (7 * 60 + 30, 1.0)]
+
+
 class FakeBridge:
     def __init__(self):
         self.init = None

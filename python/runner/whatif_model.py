@@ -129,7 +129,7 @@ def _scenario_minute(trace: DayTrace, ts: int, warmup: int) -> float:
 
 
 def trace_scenario(trace: DayTrace, warmup_hours: float = DEFAULT_WARMUP_HOURS) -> Scenario:
-    """Real meals and manual boluses shifted onto a scenario clock with a warmup block."""
+    """Real meals and boluses on a scenario clock; pre-window SMBs are real history."""
     warmup = int(round(warmup_hours * 60))
     since = trace.window_start - warmup * 60_000
     meals: list[tuple[float, float]] = []
@@ -139,7 +139,11 @@ def trace_scenario(trace: DayTrace, warmup_hours: float = DEFAULT_WARMUP_HOURS) 
             continue
         if treatment.kind not in ("carbs", "bolus") or treatment.amount <= 0:
             continue
-        if treatment.kind == "bolus" and treatment.origin == "loop":
+        if (
+            treatment.kind == "bolus"
+            and treatment.origin == "loop"
+            and treatment.ts >= trace.window_start
+        ):
             continue
         minute = _scenario_minute(trace, treatment.ts, warmup)
         if minute < 0:
@@ -205,7 +209,7 @@ def build_algorithm_profile(
 
 
 def _cycles_from_loop(
-    trace: DayTrace, loop, offset: float, warmup: int, cadence: float
+    trace: DayTrace, loop, warmup: int, cadence: float
 ) -> list[ReplayCycle]:
     start = int(round(warmup / cadence))
     smb: dict[float, float] = {}
@@ -218,7 +222,7 @@ def _cycles_from_loop(
         time_min = float(loop.time[index])
         cycles.append(ReplayCycle(
             ts=trace.window_start + int(round((time_min - warmup) * 60_000)),
-            glucose=float(loop.cgm[index]) + offset,
+            glucose=float(loop.cgm[index]),
             rate=float(loop.rate[index]),
             smb=smb.get(round(time_min, 6), 0.0),
             insulin_req=float(loop.insulin_req[index]),
@@ -276,15 +280,14 @@ def run_model(
         offset = 0.0
         warnings.append("no model glucose at warmup: glucose offset is 0")
     else:
-        offset = real - float(loop.cgm[start - 1])
+        offset = float(loop.cgm[start - 1]) - real
     if match.confidence != "good":
         warnings.append(
             f"subject similarity is low: distance {match.distance:.2f} > {GOOD_DISTANCE}"
         )
-    since = trace.window_start - warmup * 60_000
     excluded = sum(
         1 for treatment in trace.treatments
-        if since <= treatment.ts <= trace.window_end
+        if trace.window_start <= treatment.ts <= trace.window_end
         and treatment.kind == "bolus" and treatment.origin == "loop"
     )
     if excluded:
@@ -292,7 +295,7 @@ def run_model(
     warnings.extend(f"trace: {warning}" for warning in trace.warnings)
     return ModelResult(
         match=match,
-        cycles=_cycles_from_loop(trace, loop, offset, warmup, CADENCE_MIN),
+        cycles=_cycles_from_loop(trace, loop, warmup, CADENCE_MIN),
         glucose_offset=offset,
         warnings=warnings,
     )
