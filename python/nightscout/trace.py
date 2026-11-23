@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -485,4 +485,85 @@ def build_trace(
         timezone=zone,
         sensor=_sensor_name(points),
         warnings=warnings,
+    )
+
+
+def trace_to_dict(trace: DayTrace) -> dict:
+    """Serialize a day trace to a JSON-ready dict."""
+    return asdict(trace)
+
+
+def _curve_from_dict(raw: object) -> list[tuple[int, float]]:
+    if not isinstance(raw, list):
+        return []
+    points: list[tuple[int, float]] = []
+    for item in raw:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            continue
+        points.append((int(item[0]), float(item[1])))
+    return points
+
+
+def trace_from_dict(data: dict) -> DayTrace:
+    """Rebuild a day trace from trace_to_dict output."""
+    entries = [
+        CgmPoint(
+            ts=int(item["ts"]),
+            mgdl=float(item["mgdl"]),
+            direction=str(item.get("direction", "NONE")),
+            device=str(item.get("device", "")),
+        )
+        for item in data.get("entries", [])
+    ]
+    treatments = [
+        Treatment(
+            ts=int(item["ts"]),
+            kind=str(item["kind"]),
+            amount=float(item.get("amount", 0.0)),
+            duration_min=float(item.get("duration_min", 0.0)),
+            origin=str(item.get("origin", "manual")),
+            meta=dict(item.get("meta", {})),
+        )
+        for item in data.get("treatments", [])
+    ]
+    profiles = [
+        ProfileSegment(
+            start_ms=int(item["start_ms"]),
+            basal=_curve_from_dict(item.get("basal")),
+            sens=_curve_from_dict(item.get("sens")),
+            carb_ratio=_curve_from_dict(item.get("carb_ratio")),
+            target_low=_curve_from_dict(item.get("target_low")),
+            target_high=_curve_from_dict(item.get("target_high")),
+            units=str(item.get("units", "mg/dL")),
+            timezone=str(item.get("timezone", "UTC")),
+        )
+        for item in data.get("profiles", [])
+    ]
+    decisions = [
+        DecisionRecord(
+            ts=int(item["ts"]),
+            deliver_at=int(item["deliver_at"]),
+            insulin_req=item.get("insulin_req"),
+            final_isf=item.get("final_isf"),
+            factors={
+                str(key): float(value)
+                for key, value in (item.get("factors") or {}).items()
+            },
+            smb_on=bool(item.get("smb_on", False)),
+            rate=item.get("rate"),
+            eventual_bg=item.get("eventual_bg"),
+            sensitivity_ratio=item.get("sensitivity_ratio"),
+        )
+        for item in data.get("decisions", [])
+    ]
+    return DayTrace(
+        entries=entries,
+        treatments=treatments,
+        profiles=profiles,
+        decisions=decisions,
+        window_start=int(data.get("window_start", 0)),
+        window_end=int(data.get("window_end", 0)),
+        timezone=str(data.get("timezone", "UTC")),
+        sensor=str(data.get("sensor", "")),
+        warnings=list(data.get("warnings", [])),
     )
