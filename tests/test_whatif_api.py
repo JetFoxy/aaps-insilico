@@ -209,6 +209,59 @@ def test_import_builds_trace_and_hides_network_secrets():
             live.WHATIF_SETTINGS.pop(trace_id, None)
 
 
+def test_empty_settings_export_is_not_marked_as_loaded():
+    assert live._whatif_settings({"prefs_text": "{}"})[2] is False
+
+
+def test_reimport_replaces_the_previous_import_from_the_same_host():
+    now = int(time.time() * 1000)
+    profile = {
+        "startDate": now - 86_400_000,
+        "defaultProfile": "Main",
+        "store": {"Main": {
+            "units": "mg/dL", "timezone": "UTC",
+            "sens": [{"time": "00:00", "value": 50}],
+            "carbratio": [{"time": "00:00", "value": 10}],
+            "basal": [{"time": "00:00", "value": 1.0}],
+            "target_low": [{"time": "00:00", "value": 100}],
+            "target_high": [{"time": "00:00", "value": 130}],
+        }},
+    }
+    routes = {
+        "/api/v1/status.json": lambda query: (200, {}),
+        "/api/v1/profile.json": lambda query: (200, [profile]),
+        "/api/v1/entries.json": lambda query: (200, [
+            {"type": "sgv", "date": now - 60_000, "sgv": 120},
+        ]),
+        "/api/v1/treatments.json": lambda query: (200, []),
+        "/api/v1/devicestatus.json": lambda query: (200, []),
+    }
+    stub = StubNightscout(routes)
+    with stub:
+        _, first = live.whatif_fetch({"url": stub.url, "days": 1})
+        _, second = live.whatif_fetch({"url": stub.url, "days": 1})
+        try:
+            assert first not in live.TRACES
+            assert second in live.TRACES
+        finally:
+            live.TRACES.pop(second, None)
+            live.WHATIF_SETTINGS.pop(second, None)
+
+
+def test_expired_trace_is_pruned_on_access():
+    trace_id = register("expired-access")
+    live.WHATIF_SETTINGS[trace_id]["created"] = time.time() - live.WHATIF_TTL_S - 1
+    server = start()
+    try:
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            fetch_json(server, f"/api/whatif/trace/{trace_id}")
+        assert exc.value.code == 404
+    finally:
+        server.shutdown()
+        live.TRACES.pop(trace_id, None)
+        live.WHATIF_SETTINGS.pop(trace_id, None)
+
+
 def test_fetch_errors_never_echo_url_or_token(monkeypatch):
     class Broken:
         def __init__(self, url, token=None):

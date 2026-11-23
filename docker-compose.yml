@@ -2,5 +2,5 @@ services:
   bench:
     image: aaps-insilico:local
     ports:
-      - "8766:8766"
+      - "127.0.0.1:8766:8766"
     restart: unless-stopped

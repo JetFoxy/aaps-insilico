@@ -253,7 +253,7 @@ def _cycles_from_loop(
             factors={},
             iob=float(loop.iob[index]),
             eventual_bg=None,
-            sensitivity_ratio=1.0,
+            sensitivity_ratio=None,
             reason=str(loop.reason[index]),
         ))
     return cycles

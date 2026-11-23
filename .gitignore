@@ -1,4 +1,5 @@
 data/raw/
+data/nightscout/
 data/golden/*.jsonl
 .venv/
 __pycache__/

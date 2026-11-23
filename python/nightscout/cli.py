@@ -32,9 +32,10 @@ def _build_parser() -> argparse.ArgumentParser:
     importer = commands.add_parser("import", help="read a Nightscout window and summarize it")
     importer.add_argument("--url", required=True)
     importer.add_argument("--token")
+    importer.add_argument("--api-secret")
     importer.add_argument("--days", type=_positive_int, default=DEFAULT_DAYS)
     importer.add_argument("--prefs")
-    importer.add_argument("--password")
+    importer.add_argument("--password", help="use - to read the password from stdin")
     importer.add_argument("--out")
     return parser
 
@@ -58,8 +59,10 @@ def _load_prefs(path: str, password: str | None) -> bool:
         text = Path(path).read_text(encoding="utf-8")
     except OSError:
         raise PrefsDecryptError("cannot read settings export file") from None
-    decode_export(text, password)
-    return True
+    decoded = decode_export(text, password)
+    return bool({
+        key: value for key, value in decoded.items() if key != "insulin_configuration"
+    })
 
 
 def _import_window(args: argparse.Namespace) -> int:
@@ -67,8 +70,11 @@ def _import_window(args: argparse.Namespace) -> int:
     window_end = int(time.time() * 1000)
     window_start = window_end - days * DAY_MS
     history_start = window_start - LOOKBACK_MS
-    prefs_loaded = _load_prefs(args.prefs, args.password) if args.prefs else False
-    client = NightscoutClient(args.url, token=args.token)
+    password = args.password
+    if password == "-":
+        password = sys.stdin.readline().strip()
+    prefs_loaded = _load_prefs(args.prefs, password) if args.prefs else False
+    client = NightscoutClient(args.url, token=args.token, api_secret=args.api_secret)
     client.status()
     profiles = client.profile()
     entries = client.entries(history_start, window_end)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import math
 import os
@@ -191,7 +192,7 @@ def _whatif_settings(payload: dict) -> tuple[dict, dict, bool]:
     prefs = {
         key: value for key, value in decoded.items() if key != "insulin_configuration"
     }
-    return prefs, _insulin_from_configuration(decoded), True
+    return prefs, _insulin_from_configuration(decoded), bool(prefs)
 
 
 def _prune_whatif(now: float) -> None:
@@ -223,6 +224,8 @@ def whatif_fetch(payload: dict) -> tuple[dict, str]:
     url = payload.get("url")
     token = payload.get("token")
     token = None if token in (None, "") else str(token)
+    api_secret = payload.get("api_secret")
+    api_secret = None if api_secret in (None, "") else str(api_secret)
     password = payload.get("password")
     password = None if password in (None, "") else str(password)
     if not isinstance(url, str) or not url.strip():
@@ -232,13 +235,14 @@ def whatif_fetch(payload: dict) -> tuple[dict, str]:
         raise WhatifError("url must be an http(s) Nightscout address", 400)
     requested = int(_num(payload.get("days"), float(WHATIF_DEFAULT_DAYS), 1, 10**6))
     days = min(requested, WHATIF_MAX_DAYS)
-    secrets = (url, token, password, parts.netloc)
+    secrets = (url, token, api_secret, password, parts.netloc)
+    source = hashlib.sha1(parts.netloc.encode()).hexdigest()[:12]
     try:
         prefs, insulin, prefs_loaded = _whatif_settings(payload)
         window_end = int(time.time() * 1000)
         window_start = window_end - days * WHATIF_DAY_MS
         history_start = window_start - WHATIF_LOOKBACK_MS
-        client = NightscoutClient(url, token=token)
+        client = NightscoutClient(url, token=token, api_secret=api_secret)
         client.status()
         profiles = client.profile()
         entries = client.entries(history_start, window_end)
@@ -274,11 +278,15 @@ def whatif_fetch(payload: dict) -> tuple[dict, str]:
     now = time.time()
     _prune_whatif(now)
     with WHATIF_LOCK:
+        for existing, settings in list(WHATIF_SETTINGS.items()):
+            if settings.get("source") == source:
+                _drop_whatif(existing)
         TRACES[trace_id] = trace
         WHATIF_SETTINGS[trace_id] = {
             "prefs": prefs,
             "insulin": insulin,
             "prefs_loaded": prefs_loaded,
+            "source": source,
             "created": now,
         }
     return _whatif_summary(trace, prefs_loaded), trace_id
@@ -322,6 +330,7 @@ def _whatif_run_spec(payload: dict) -> dict:
     trace_id = payload.get("trace_id")
     if not isinstance(trace_id, str) or not trace_id:
         raise WhatifError("trace_id is required", 400)
+    _prune_whatif(time.time())
     with WHATIF_LOCK:
         trace = TRACES.get(trace_id)
         settings = dict(WHATIF_SETTINGS.get(trace_id) or {})
@@ -651,6 +660,7 @@ class Handler(SimpleHTTPRequestHandler):
             })
             return
         if path.startswith("/api/whatif/trace/"):
+            _prune_whatif(time.time())
             trace_id = path.removeprefix("/api/whatif/trace/").strip("/")
             with WHATIF_LOCK:
                 trace = TRACES.get(trace_id)
