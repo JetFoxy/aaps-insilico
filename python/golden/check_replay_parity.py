@@ -68,12 +68,10 @@ def _numeric(
     stats: dict[str, dict], name: str, tolerance: float, expected, actual
 ) -> None:
     row = stats[name]
-    row["n"] += 1
-    if expected is None and actual is None:
-        row["matched"] += 1
-        row["match"] = row["matched"] / row["n"]
+    if expected is None:
         return
-    if expected is None or actual is None:
+    row["n"] += 1
+    if actual is None:
         row["match"] = row["matched"] / row["n"]
         return
     error = abs(float(expected) - float(actual))
@@ -154,10 +152,14 @@ def _warning_counts(warnings: list[str]) -> dict[str, int]:
     return counts
 
 
+def _matched_pairs(stats: dict[str, dict], decisions: list[DecisionRecord]) -> int:
+    return max(0, len(decisions) - stats["unmatched"]["n"])
+
+
 def _coverage(stats: dict[str, dict], decisions: list[DecisionRecord]) -> float:
     if not decisions:
         return 0.0
-    return stats["final_isf"]["n"] / len(decisions)
+    return _matched_pairs(stats, decisions) / len(decisions)
 
 
 def _verdict(stats: dict[str, dict], decisions: list[DecisionRecord]) -> tuple[bool, str]:
@@ -217,33 +219,37 @@ def _render(
         "",
         "1. Трейс импортируется из Nightscout (W1): сырые точки CGM, лечения, профиль, "
         "записи решений.",
-        "2. Baseline-вариант собирается из настроек стенда и профиля Nightscout; replay идёт "
-        "по 5-минутной сетке, глюкоза не пересчитывается.",
-        "3. Каждое записанное решение сопоставляется с ближайшим циклом replay по `deliverAt` "
-        "с окном ±1 мин; без пары решение попадает в `unmatched`.",
+        "2. Baseline-вариант собирается из настроек стенда и профиля Nightscout; точки решения "
+        "берутся из записанных `deliverAt` (5-минутная сетка — только если решений в трейсе "
+        "нет), глюкоза не пересчитывается.",
+        "3. Каждое записанное решение сопоставляется с циклом replay по `deliverAt` с окном "
+        "±1 мин; без пары решение попадает в `unmatched`.",
         "4. Для каждого поля считается доля совпадений в пределах допуска и максимальная "
         "абсолютная ошибка; `smbOn` сравнивается с фактом доставки SMB (`smb > 0`).",
         "5. AAPS пишет в `openaps.suggested.autoIsf.finalIsf` итоговый множитель autoISF, а не "
         "абсолютную чувствительность; поэтому поле сверяется с множителем `aiv.finalIsf` из "
         "ответа моста, а не с `sens` (mg/dL/U).",
+        "6. Записи, где у поля нет эталона (`None`), в знаменатель `n` этого поля не входят: "
+        "доля считается только по записям с ground truth.",
         "",
         "## 3. Результаты",
         "",
-        "| Поле | Совпадение | Макс. ошибка | Порог |",
-        "|---|---|---|---|",
+        "| Поле | n | Совпадение | Макс. ошибка | Порог |",
+        "|---|---|---|---|---|",
     ]
     for name in rows:
         row = stats[name]
         tolerance = tolerances[name.split(":")[0] if name.startswith("factor:") else name]
         lines.append(
-            f"| `{name}` | {row['matched']}/{row['n']} ({row['match']:.1%}) | "
+            f"| `{name}` | {row['n']} | {row['matched']}/{row['n']} ({row['match']:.1%}) | "
             f"{_format_error(row['max_error'])} | {_format_tolerance(name, tolerance)} |"
         )
     lines += [
         "",
         "## 4. Исключённые циклы",
         "",
-        f"- сопоставлено пар «решение — цикл»: {stats['final_isf']['n']} из {len(decisions)};",
+        f"- сопоставлено пар «решение — цикл»: "
+        f"{_matched_pairs(stats, decisions)} из {len(decisions)};",
         f"- без пары по времени (`unmatched`): {stats['unmatched']['n']};",
         f"- пропущено из-за пропуска CGM (`skipped`): {stats['skipped']['n']};",
         f"- исключено loop-болюсов (SMB из записи): {counts.get('excluded loop boluses', 0)};",
@@ -265,10 +271,9 @@ def _render(
         lines.append("")
         if coverage < 0.95:
             lines.append(
-                f"- Покрытие по `deliverAt` — {stats['final_isf']['n']} из {len(decisions)} "
-                f"({coverage:.1%}) при требуемых 95%: записанные решения идут чаще, чем "
-                "5-минутная сетка replay, поэтому у большей части решений нет своего цикла. "
-                "Это ограничение шага replay, а не допусков."
+                f"- Покрытие по `deliverAt` — {_matched_pairs(stats, decisions)} из "
+                f"{len(decisions)} ({coverage:.1%}) при требуемых 95%: у части решений нет "
+                "цикла replay в окне ±1 мин. Это ограничение сопоставления, а не допусков."
             )
         if failed:
             detail = ", ".join(
@@ -276,7 +281,7 @@ def _render(
                 f"({stats[name]['match']:.1%})"
                 for name in failed
             )
-            lines.append(f"- Даже на сопоставленных циклах поля расходятся: {detail}.")
+            lines.append(f"- На сопоставленных циклах поля расходятся: {detail}.")
         weak_factors = [
             f"`{name}` {stats[name]['match']:.1%}"
             for name in stats
@@ -300,8 +305,9 @@ def _render(
         "5. Смена профиля применяется только через сегменты профиля Nightscout.",
         "6. Числа в отчёте агрегированные: значения глюкозы, время приёмов пищи и параметры "
         "инсулина не публикуются.",
-        "7. Шаг replay фиксирован (5 мин), а записанные решения приходят чаще; выравнивание "
-        "сетки по `deliverAt` — следующий шаг, без него покрытие W2 не достигает 95%.",
+        "7. Шаг replay следует записанным `deliverAt`; 5-минутная сетка остаётся запасным "
+        "вариантом для трейсов без решений. Расхождение полей на одинаковых точках времени — "
+        "это разница входов replay и записи, а не ошибка сопоставления.",
         "",
     ]
     return "\n".join(lines)
@@ -360,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     summary = {
         "decisions": len(trace.decisions),
-        "matched": stats["final_isf"]["n"],
+        "matched": _matched_pairs(stats, decisions),
         "unmatched": stats["unmatched"]["n"],
         "skipped": stats["skipped"]["n"],
         **{name: stats[name]["match"] for name in MAIN_FIELDS},

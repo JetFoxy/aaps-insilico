@@ -93,3 +93,13 @@ def test_final_isf_prefers_the_autoisf_factor_over_absolute_sensitivity():
     replay.cycles[0].factors["finalIsf"] = 1.05
     stats = compare(replay, [decision(T0, isf=1.05)])
     assert stats["final_isf"]["match"] == 1.0
+
+
+def test_record_without_ground_truth_leaves_the_denominator():
+    replay = ReplayResult(
+        ReplayVariant(label="A"), [cycle(T0), cycle(T0 + 300_000)], [], []
+    )
+    stats = compare(replay, [decision(T0, isf=None), decision(T0 + 300_000)])
+    assert stats["final_isf"]["n"] == 1
+    assert stats["final_isf"]["match"] == 1.0
+    assert stats["rate"]["n"] == 2
