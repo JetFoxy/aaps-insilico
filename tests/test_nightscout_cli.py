@@ -41,3 +41,21 @@ def test_import_summary_has_no_token():
     assert summary["entries"] == 1
     assert summary["prefs_loaded"] is False
     assert any("devicestatus" in w for w in summary["warnings"])
+
+
+def test_import_caps_window_at_fourteen_days():
+    routes = {
+        "/api/v1/status.json": lambda q: (200, {"apiEnabled": True}),
+        "/api/v1/profile.json": lambda q: (200, [PROFILE]),
+        "/api/v1/entries.json": lambda q: (200, []),
+        "/api/v1/treatments.json": lambda q: (200, []),
+        "/api/v1/devicestatus.json": lambda q: (200, []),
+    }
+    stub = StubNightscout(routes)
+    out = io.StringIO()
+    with stub, redirect_stdout(out):
+        code = main(["import", "--url", stub.url, "--days", "30"])
+    summary = json.loads(out.getvalue())
+    assert code == 0
+    assert summary["window_end"] - summary["window_start"] == 14 * 86_400_000
+    assert any("cap" in w and "14" in w for w in summary["warnings"])

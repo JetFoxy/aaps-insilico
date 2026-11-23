@@ -47,6 +47,22 @@ def test_error_body_echoing_token_is_redacted():
     assert exc.value.status == 500
 
 
+def test_error_body_echoing_base_url_is_redacted():
+    def route(query):
+        host_port = stub.url.removeprefix("http://")
+        return (500, {"error": f"proxy failed for {stub.url} ({host_port})"})
+
+    stub = StubNightscout({"/api/v1/entries.json": route})
+    with stub:
+        client = NightscoutClient(stub.url, token="tok-secret")
+        with pytest.raises(NightscoutError) as exc:
+            client.entries(0, 1)
+    text = str(exc.value)
+    assert stub.url not in text
+    assert stub.url.removeprefix("http://") not in text
+    assert "tok-secret" not in text
+
+
 def test_base_url_drops_query_and_fragment():
     stub = StubNightscout({"/api/v1/status.json": lambda q: (200, {"status": "ok"})})
     with stub:

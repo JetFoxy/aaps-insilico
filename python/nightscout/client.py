@@ -130,7 +130,11 @@ class NightscoutClient:
             return text
 
     def _redact(self, text: str) -> str:
-        redacted = _TOKEN_PARAM.sub(r"\1***", text)
+        redacted = text.replace(self.base_url, "***") if self.base_url else text
+        netloc = urllib.parse.urlsplit(self.base_url).netloc
+        if netloc:
+            redacted = redacted.replace(netloc, "***")
+        redacted = _TOKEN_PARAM.sub(r"\1***", redacted)
         redacted = redacted.replace(self.api_secret, "***") if self.api_secret else redacted
         redacted = redacted.replace(self.token, "***") if self.token else redacted
         return redacted.replace("api-secret", "***")
