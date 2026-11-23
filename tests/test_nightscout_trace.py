@@ -50,7 +50,7 @@ def test_build_trace_normalizes_units_and_events():
                         devicestatus=devicestatus, window_start=T0, window_end=T0 + 3600_000)
     assert [p.mgdl for p in trace.entries] == [120, 121]
     assert trace.profile_at(T0).sens[0][1] == 900.0
-    assert trace.profile_at(T0).carb_ratio[0][1] == 180.0
+    assert trace.profile_at(T0).carb_ratio[0][1] == 10.0
     assert trace.treatments[0].origin == "loop"
     assert trace.treatments[1].origin == "manual"
     assert trace.active_temp_target(T0 + 10 * MIN) == (5.0 * 18, 6.0 * 18)
@@ -78,6 +78,16 @@ def test_untyped_bolus_is_reported_not_guessed():
                         devicestatus=[], window_start=T0, window_end=T0 + 1)
     assert trace.treatments[0].origin == "unknown"
     assert any("unclassified" in w for w in trace.warnings)
+
+
+def test_mmol_profile_scales_only_bg_unit_fields():
+    doc = profile_doc(T0, 5.0, 12.0, 1.0)
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}], treatments=[],
+                        profiles=[doc], devicestatus=[], window_start=T0, window_end=T0 + 1)
+    segment = trace.profile_at(T0)
+    assert segment.carb_ratio_at(T0) == 12.0
+    assert segment.sens_at(T0) == 90.0
+    assert segment.target_low_at(T0) == 99.0
 
 
 def test_temp_target_respects_record_units():

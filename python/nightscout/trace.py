@@ -372,7 +372,7 @@ def _parse_profiles(docs: list[dict], timezone: str | None) -> list[ProfileSegme
         basal = _curve(values["basal"], 1.0) if "basal" in values else _inherited(previous, "basal")
         sens = _curve(values["sens"], factor) if "sens" in values else _inherited(previous, "sens")
         carb_ratio = (
-            _curve(values["carbratio"], factor)
+            _curve(values["carbratio"], 1.0)
             if "carbratio" in values
             else _inherited(previous, "carb_ratio")
         )
