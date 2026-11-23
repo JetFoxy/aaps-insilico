@@ -399,11 +399,13 @@
     }
     const url = el("ns-url").value.trim();
     const token = el("ns-token").value;
+    const apiSecret = el("ns-api-secret").value;
     const days = Number(el("ns-days").value || 3);
     const file = el("prefs-file").files[0];
     const password = el("prefs-password").value;
     const payload = { url, days };
     if (token) payload.token = token;
+    if (apiSecret) payload.api_secret = apiSecret;
     if (password) payload.password = password;
     if (file) {
       try {
@@ -429,6 +431,7 @@
       state.realTrace = null;
       clearResults();
       el("ns-token").value = "";
+      el("ns-api-secret").value = "";
       el("prefs-password").value = "";
       el("prefs-file").value = "";
       el("connect-panel").classList.add("hidden");
@@ -470,6 +473,7 @@
       el("import-panel").classList.add("hidden");
       el("connect-panel").classList.remove("hidden");
       el("ns-token").value = "";
+      el("ns-api-secret").value = "";
       el("prefs-password").value = "";
       el("prefs-file").value = "";
       state.mode = "replay";

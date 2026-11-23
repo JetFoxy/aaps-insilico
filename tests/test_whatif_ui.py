@@ -29,5 +29,6 @@ def test_i18n_has_whatif_keys_in_both_languages():
         "whatif.metrics.realDay",
         "whatif.notReproduced.parity",
         "whatif.notReproduced.modelAbsolute",
+        "whatif.connect.apiSecret",
     ):
         assert text.count(f'"{key}"') >= 2
