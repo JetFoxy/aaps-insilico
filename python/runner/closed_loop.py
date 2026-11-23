@@ -38,7 +38,7 @@ class Scenario:
     name: str = "basal"
     duration_min: int = 24 * 60
     meals: list[tuple[float, float]] = field(default_factory=list)  # (minute, grams)
-    boluses: list[tuple[float, float]] = field(default_factory=list)  # (minute, units)
+    boluses: list[tuple[float, float]] = field(default_factory=list)
     meal_mode: str = "fcl"  # "fcl" | "announced"
     exercise: ExerciseSession | None = None
     suspend: tuple[float, float] | None = None  # (start_min, duration_min)

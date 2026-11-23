@@ -266,7 +266,7 @@ def whatif_fetch(payload: dict) -> tuple[dict, str]:
         raise WhatifError(_scrub(exc, *secrets), status) from None
     except PrefsDecryptError as exc:
         raise WhatifError(_scrub(exc, *secrets), 400) from None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise WhatifError(_scrub(f"{type(exc).__name__}: {exc}", *secrets), 500) from None
 
     trace_id = uuid.uuid4().hex[:12]
@@ -464,7 +464,7 @@ def whatif_run(spec: dict, channel: "queue.Queue[dict]") -> None:
                 "warnings": list(result.warnings),
             })
         channel.put({"type": "done", "results": results})
-    except Exception as exc:  # noqa: BLE001 - surface any failure to the browser
+    except Exception as exc:
         channel.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"[-500:]})
 
 
@@ -648,7 +648,7 @@ class Handler(SimpleHTTPRequestHandler):
             except WhatifError as exc:
                 self._json({"error": str(exc)}, exc.status)
                 return
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self._json({"error": _scrub(
                     f"{type(exc).__name__}: {exc}",
                     payload.get("url"), payload.get("token"), payload.get("password"),
