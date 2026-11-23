@@ -93,31 +93,41 @@ def _effective_profile(profile, now: int, overrides: dict) -> dict[str, float]:
     return values
 
 
+def _real_treatment(treatment) -> dict | None:
+    """Bridge-format manual bolus or carbs; loop SMBs and other kinds are dropped."""
+    if treatment.kind == "bolus":
+        if treatment.origin == "loop":
+            return None
+        return {
+            "kind": "bolus", "ts": treatment.ts, "amount": treatment.amount,
+            "type": "NORMAL", "isValid": True,
+        }
+    if treatment.kind == "carbs":
+        if treatment.amount <= 0:
+            return None
+        return {
+            "kind": "carbs", "ts": treatment.ts,
+            "amount": treatment.amount, "duration": 0,
+        }
+    return None
+
+
 def _seed_history(trace, since_ms: int) -> list[dict]:
     """Bridge-format treatments from the seed window; SMB boluses never come back."""
     seeded: list[dict] = []
     for treatment in trace.treatments:
         if treatment.ts < since_ms or treatment.ts >= trace.window_start:
             continue
-        if treatment.kind == "bolus":
-            if treatment.origin == "loop":
-                continue
-            seeded.append({
-                "kind": "bolus", "ts": treatment.ts, "amount": treatment.amount,
-                "type": "NORMAL", "isValid": True,
-            })
-        elif treatment.kind == "carbs":
-            if treatment.amount > 0:
-                seeded.append({
-                    "kind": "carbs", "ts": treatment.ts,
-                    "amount": treatment.amount, "duration": 0,
-                })
-        elif treatment.kind == "temp_basal":
+        if treatment.kind == "temp_basal":
             seeded.append({
                 "kind": "temp", "ts": treatment.ts,
                 "duration": int(round(treatment.duration_min * 60_000)),
                 "rate": treatment.amount, "isAbsolute": True, "isValid": True,
             })
+            continue
+        converted = _real_treatment(treatment)
+        if converted is not None:
+            seeded.append(converted)
     return seeded
 
 
@@ -222,12 +232,38 @@ def run_replay(
     })
     journal = list(seeded)
     result = ReplayResult(variant=variant)
+    in_window = sorted(
+        (
+            treatment for treatment in trace.treatments
+            if trace.window_start <= treatment.ts <= trace.window_end
+            and treatment.kind in ("bolus", "carbs")
+        ),
+        key=lambda treatment: treatment.ts,
+    )
+    excluded_loop = sum(
+        1 for treatment in in_window
+        if treatment.kind == "bolus" and treatment.origin == "loop"
+    )
+    unclassified = sum(
+        1 for treatment in in_window
+        if treatment.kind == "bolus" and treatment.origin == "unknown"
+    )
+    if excluded_loop:
+        result.warnings.append(f"excluded loop boluses: {excluded_loop}")
+    if unclassified:
+        result.warnings.append(f"unclassified boluses: {unclassified}")
+    pending = 0
     step_ms = int(cadence_min * 60_000)
     if step_ms <= 0:
         raise ValueError("cadence_min must be positive")
 
     now = trace.window_start
     while now <= trace.window_end:
+        while pending < len(in_window) and in_window[pending].ts <= now:
+            converted = _real_treatment(in_window[pending])
+            if converted is not None:
+                journal.append(converted)
+            pending += 1
         window_lo = now - int(readings_window_min * 60_000)
         readings = [[entry.ts, entry.mgdl] for entry in trace.entries
                     if window_lo <= entry.ts <= now]
@@ -257,7 +293,7 @@ def run_replay(
             "isTempTarget": temptarget_set,
             "tempTarget": temp_target,
             "treatments": list(journal),
-            "mealMode": "fcl",
+            "mealMode": "announced",
             "isf": values["isf"],
             "carbRatio": values["carb_ratio"],
             "target": values["target"],

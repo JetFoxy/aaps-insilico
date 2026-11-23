@@ -90,6 +90,36 @@ def test_replay_skips_cgm_gap_and_reports_it():
     assert any("gap" in w for w in result.warnings)
 
 
+def test_in_window_real_boluses_and_carbs_reach_the_bridge():
+    trace = make_trace()
+    trace.treatments.append(type(trace.treatments[0])(
+        ts=T0 + 10 * MIN, kind="bolus", amount=3.0, duration_min=0.0, origin="manual"))
+    trace.treatments.append(type(trace.treatments[0])(
+        ts=T0 + 10 * MIN, kind="carbs", amount=40.0, duration_min=0.0, origin="manual"))
+    trace.treatments.append(type(trace.treatments[0])(
+        ts=T0 + 10 * MIN, kind="bolus", amount=0.7, duration_min=0.0, origin="loop"))
+    bridge = FakeBridge()
+    run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    early = [r for r in bridge.requests if r["cmd"] == "cycle"][0]
+    later = [r for r in bridge.requests if r["cmd"] == "cycle"][3]
+    assert all(not (t["kind"] == "bolus" and t["amount"] == 3.0) for t in early["treatments"])
+    assert any(t["kind"] == "bolus" and t["amount"] == 3.0 for t in later["treatments"])
+    assert any(t["kind"] == "carbs" and t["amount"] == 40.0 for t in later["treatments"])
+    assert all(not (t["kind"] == "bolus" and t["amount"] == 0.7) for t in later["treatments"])
+    assert later["mealMode"] == "announced"
+
+
+def test_in_window_untyped_bolus_is_included_with_warning():
+    trace = make_trace()
+    trace.treatments.append(type(trace.treatments[0])(
+        ts=T0 + 5 * MIN, kind="bolus", amount=1.5, duration_min=0.0, origin="unknown"))
+    bridge = FakeBridge()
+    result = run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    last = [r for r in bridge.requests if r["cmd"] == "cycle"][-1]
+    assert any(t["kind"] == "bolus" and t["amount"] == 1.5 for t in last["treatments"])
+    assert any("unclassified" in w for w in result.warnings)
+
+
 def test_smb_off_disables_micro_bolus():
     trace = make_trace()
     bridge = FakeBridge()
