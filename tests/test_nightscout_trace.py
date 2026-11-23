@@ -108,3 +108,18 @@ def test_temp_target_unknown_units_are_not_guessed():
     assert trace.active_temp_target(T0 + MIN) == (5.0, 6.0)
     assert any("temp target" in w for w in trace.warnings)
 
+def test_history_start_keeps_pre_window_cgm_points():
+    entries = [
+        {"type": "sgv", "date": T0 - 60 * MIN, "sgv": 90},
+        {"type": "sgv", "date": T0 + MIN, "sgv": 120},
+    ]
+    profiles = [profile_doc(T0 - 86_400_000, 50.0, 10.0, 1.0)]
+    default = build_trace(entries=entries, treatments=[], profiles=profiles,
+                          devicestatus=[], window_start=T0, window_end=T0 + 3600_000)
+    assert [point.mgdl for point in default.entries] == [120]
+    assert default.window_start == T0
+    extended = build_trace(entries=entries, treatments=[], profiles=profiles,
+                           devicestatus=[], window_start=T0, window_end=T0 + 3600_000,
+                           history_start=T0 - 8 * 3_600_000)
+    assert [point.mgdl for point in extended.entries] == [90, 120]
+    assert extended.window_start == T0

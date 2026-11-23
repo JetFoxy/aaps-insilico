@@ -459,10 +459,16 @@ def build_trace(
     window_start: int,
     window_end: int,
     timezone: str | None = None,
+    history_start: int | None = None,
 ) -> DayTrace:
-    """Normalize raw Nightscout documents into a DayTrace for the import window."""
+    """Normalize raw Nightscout documents into a DayTrace for the import window.
+
+    CGM points are kept from history_start (default window_start) so replay gets a sensor
+    window and seed history; treatments and decisions are never clipped.
+    """
     warnings: list[str] = []
-    points = _parse_entries(entries, window_start, window_end)
+    start = window_start if history_start is None else history_start
+    points = _parse_entries(entries, start, window_end)
     segments = _parse_profiles(profiles, timezone)
     parsed_treatments, treatment_warnings = _parse_treatments(treatments, segments)
     warnings.extend(treatment_warnings)

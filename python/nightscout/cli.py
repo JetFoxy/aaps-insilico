@@ -14,6 +14,7 @@ from nightscout.prefs import PrefsDecryptError, decode_export
 from nightscout.trace import DayTrace, build_trace
 
 DAY_MS = 86_400_000
+LOOKBACK_MS = 8 * 3_600_000
 DEFAULT_DAYS = 3
 MAX_DAYS = 14
 
@@ -65,13 +66,14 @@ def _import_window(args: argparse.Namespace) -> int:
     days = min(args.days, MAX_DAYS)
     window_end = int(time.time() * 1000)
     window_start = window_end - days * DAY_MS
+    history_start = window_start - LOOKBACK_MS
     prefs_loaded = _load_prefs(args.prefs, args.password) if args.prefs else False
     client = NightscoutClient(args.url, token=args.token)
     client.status()
     profiles = client.profile()
-    entries = client.entries(window_start, window_end)
-    treatments = client.treatments(window_start, window_end)
-    devicestatus = client.devicestatus(window_start, window_end)
+    entries = client.entries(history_start, window_end)
+    treatments = client.treatments(history_start, window_end)
+    devicestatus = client.devicestatus(history_start, window_end)
     trace = build_trace(
         entries=entries,
         treatments=treatments,
@@ -79,6 +81,7 @@ def _import_window(args: argparse.Namespace) -> int:
         devicestatus=devicestatus,
         window_start=window_start,
         window_end=window_end,
+        history_start=history_start,
     )
     if days < args.days:
         trace.warnings.append(f"window capped at {MAX_DAYS} days")
