@@ -188,6 +188,27 @@ def _user_profile(
     return values, tdd
 
 
+def _profile_schedule(
+    trace: DayTrace,
+    variant: ReplayVariant,
+    prefs: dict,
+    warmup: int,
+) -> list[tuple[float, AlgorithmProfile]]:
+    schedule: list[tuple[float, AlgorithmProfile]] = []
+    for segment in trace.profiles:
+        if not (trace.window_start < segment.start_ms <= trace.window_end):
+            continue
+        values = _effective_profile(segment, segment.start_ms, variant.profile_overrides)
+        tdd = _with_override(
+            _total_daily_dose(trace, values["basal"]), variant.profile_overrides, "tdd"
+        )
+        minute = warmup + (segment.start_ms - trace.window_start) / 60_000
+        schedule.append(
+            (minute, build_algorithm_profile(values, tdd, prefs, variant))
+        )
+    return schedule
+
+
 def build_algorithm_profile(
     values: dict[str, float], tdd: float, prefs: dict, variant: ReplayVariant
 ) -> AlgorithmProfile:
@@ -269,6 +290,7 @@ def run_model(
         subject, bridge, profile, scenario,
         cadence_min=CADENCE_MIN, seed=0, noise_kind="none", on_cycle=None,
         micro_bolus_allowed=variant.smb,
+        profile_schedule=_profile_schedule(trace, variant, prefs_effective, warmup),
     )
     start = int(round(warmup / CADENCE_MIN))
     warnings: list[str] = []
@@ -292,16 +314,6 @@ def run_model(
     )
     if excluded:
         warnings.append(f"excluded loop boluses: {excluded}")
-    switches = sum(
-        1 for treatment in trace.treatments
-        if trace.window_start <= treatment.ts <= trace.window_end
-        and treatment.kind == "profile_switch"
-    )
-    if switches:
-        warnings.append(
-            f"profile switches in window: {switches}; "
-            "model keeps the profile active at window_start"
-        )
     warnings.extend(f"trace: {warning}" for warning in trace.warnings)
     return ModelResult(
         match=match,

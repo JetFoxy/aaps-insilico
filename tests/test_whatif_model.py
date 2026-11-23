@@ -122,6 +122,26 @@ def test_init_bridge_seeds_boluses_from_before_the_scenario():
     }]
 
 
+def test_closed_loop_switches_the_algorithm_profile_mid_run():
+    from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+    from simcore.params import load_subject
+
+    subject = load_subject("adult#001")
+    basal = subject.basal_u_per_min * 60
+    first = AlgorithmProfile(sens=50.0, carb_ratio=10.0, target_bg=110.0, current_basal=basal)
+    second = AlgorithmProfile(sens=100.0, carb_ratio=20.0, target_bg=120.0, current_basal=basal)
+    scenario = Scenario(duration_min=10)
+    bridge = FakeBridge()
+    init_bridge(bridge, subject, {}, {}, first, scenario)
+    run_closed_loop(
+        subject, bridge, first, scenario, temp_mode="cycle", noise_kind="none",
+        profile_schedule=[(5.0, second)],
+    )
+    assert bridge.cycles[0]["isf"] == 50.0
+    assert bridge.cycles[1]["isf"] == 100.0
+    assert bridge.cycles[1]["carbRatio"] == 20.0
+
+
 def test_closed_loop_delivers_scenario_boluses_to_model_and_bridge():
     from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
     from simcore.params import load_subject

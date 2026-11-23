@@ -112,6 +112,7 @@ def run_closed_loop(
     noise_scale: float = 1.0,
     noise_sigma: float = 2.49,
     noise_rho: float = 0.8,
+    profile_schedule: list[tuple[float, AlgorithmProfile]] | None = None,
 ) -> LoopResult:
     """temp_mode="planned" runs 30-min temps and reports minutes remaining; "cycle" is the legacy
     one-temp-per-cycle approximation."""
@@ -134,6 +135,8 @@ def run_closed_loop(
     noise_values = noise.sample(cycles) if noise is not None else np.zeros(cycles)
 
     state = subject.state0.copy()
+    schedule = sorted(profile_schedule or [], key=lambda item: item[0])
+    active_profile = profile
     basal_u_per_h = profile.current_basal
     cgm_history: list[list[float]] = []
     applied_temps: list[dict] = []
@@ -152,6 +155,11 @@ def run_closed_loop(
     for cycle in range(cycles):
         t0 = cycle * cadence_min
         t1 = t0 + cadence_min
+        previous_profile = active_profile
+        while schedule and schedule[0][0] <= t0:
+            active_profile = schedule.pop(0)[1]
+        if active_profile is not previous_profile and (not planned_temps or temp_rate is None):
+            basal_u_per_h = active_profile.current_basal
         suspended_now = scenario.suspend is not None and in_window(scenario.suspend, t0)
 
         if planned_temps:
@@ -231,7 +239,7 @@ def run_closed_loop(
 
         rate_now = basal_u_per_h
         insulin_req = 0.0
-        variable_sens = profile.sens
+        variable_sens = active_profile.sens
         iob_now = 0.0
         cob_now = 0.0
         reason_text = ""
@@ -248,8 +256,8 @@ def run_closed_loop(
             current_temp = {"duration": int(cadence_min), "rate": basal_u_per_h, "minutesrunning": 0}
 
         treatments = applied_temps + applied_boluses
-        algorithm = "dynisf" if profile.algorithm == "dynisf" else (
-            "autoisf" if profile.enable_auto_isf else None
+        algorithm = "dynisf" if active_profile.algorithm == "dynisf" else (
+            "autoisf" if active_profile.enable_auto_isf else None
         )
         meal_json = {"carbs": 0.0, "mealCOB": 0.0}
         cycle = bridge.request({
@@ -258,32 +266,32 @@ def run_closed_loop(
             "exerciseMode": False, "halfBasalExerciseTarget": 160,
             "isTempTarget": False, "treatments": treatments,
             "mealMode": scenario.meal_mode,
-            "isf": profile.sens, "carbRatio": profile.carb_ratio,
-            "target": profile.target_bg, "targetLow": profile.target_bg,
-            "targetHigh": profile.target_bg, "currentBasal": profile.current_basal,
-            "tdd": profile.tdd, "algorithm": algorithm,
+            "isf": active_profile.sens, "carbRatio": active_profile.carb_ratio,
+            "target": active_profile.target_bg, "targetLow": active_profile.target_bg,
+            "targetHigh": active_profile.target_bg, "currentBasal": active_profile.current_basal,
+            "tdd": active_profile.tdd, "algorithm": algorithm,
             "input": {
                 "now": now_ms,
-                "TDD": profile.tdd,
+                "TDD": active_profile.tdd,
                 "currentTemp": current_temp,
                 "autosens": {"ratio": 1.0},
                 "profile": {
-                    "sens": profile.sens, "variable_sens": variable_sens,
-                    "carb_ratio": profile.carb_ratio, "target_bg": profile.target_bg,
-                    "min_bg": profile.target_bg, "max_bg": profile.target_bg,
-                    "current_basal": profile.current_basal, "max_iob": profile.max_iob,
-                    "max_basal": profile.max_basal, "SMBInterval": profile.smb_interval,
-                    "bolus_increment": profile.bolus_increment,
-                    "enable_autoISF": profile.enable_auto_isf,
+                    "sens": active_profile.sens, "variable_sens": variable_sens,
+                    "carb_ratio": active_profile.carb_ratio, "target_bg": active_profile.target_bg,
+                    "min_bg": active_profile.target_bg, "max_bg": active_profile.target_bg,
+                    "current_basal": active_profile.current_basal, "max_iob": active_profile.max_iob,
+                    "max_basal": active_profile.max_basal, "SMBInterval": active_profile.smb_interval,
+                    "bolus_increment": active_profile.bolus_increment,
+                    "enable_autoISF": active_profile.enable_auto_isf,
                     "out_units": "mg/dl", "temptargetSet": False,
-                    "TDD": profile.tdd, "insulinDivisor": 75,
+                    "TDD": active_profile.tdd, "insulinDivisor": 75,
                     "use_TDD_for_predictions": True,
                 },
                 "microBolusAllowed": micro_bolus_allowed,
                 "flatBGs": False,
-                "autoIsfMode": profile.enable_auto_isf,
+                "autoIsfMode": active_profile.enable_auto_isf,
                 "loopWantedSmb": "AAPS",
-                "smbRatio": smb_ratio_for_cadence(profile, cadence_min),
+                "smbRatio": smb_ratio_for_cadence(active_profile, cadence_min),
                 "smbMaxRangeExtension": 1.0,
                 "iobThresholdPercent": 100,
                 "profilePercentage": 100,
