@@ -103,3 +103,32 @@ def test_record_without_ground_truth_leaves_the_denominator():
     assert stats["final_isf"]["n"] == 1
     assert stats["final_isf"]["match"] == 1.0
     assert stats["rate"]["n"] == 2
+
+
+def test_verdict_fails_when_a_factor_diverges_despite_main_fields():
+    from golden.check_replay_parity import _verdict
+    replay = ReplayResult(ReplayVariant(label="A"), [cycle(T0, acce=1.05)], [], [])
+    decisions = [decision(T0, acce=1.0)]
+    stats = compare(replay, decisions)
+    assert all(
+        stats[name]["match"] == 1.0
+        for name in ("final_isf", "insulin_req", "rate", "smb_on")
+    )
+    passed, reason = _verdict(stats, decisions)
+    assert passed is False
+    assert "factor:acceIsf" in reason
+
+
+def test_verdict_ignores_a_field_without_ground_truth():
+    from golden.check_replay_parity import _verdict
+    decisions = [decision(T0 + i * 300_000) for i in range(20)]
+    decisions.append(DecisionRecord(
+        ts=T0 + 20 * 300_000, deliver_at=T0 + 20 * 300_000, insulin_req=0.4,
+        final_isf=50.0, factors={"acceIsf": 1.0, "bgIsf": 1.0}, smb_on=True,
+        rate=1.1, eventual_bg=120.0, sensitivity_ratio=1.0,
+    ))
+    cycles = [cycle(T0 + i * 300_000) for i in range(20)]
+    stats = compare(ReplayResult(ReplayVariant(label="A"), cycles, [], []), decisions)
+    assert stats["factor:bgIsf"]["n"] == 0
+    passed, reason = _verdict(stats, decisions)
+    assert passed is True, reason

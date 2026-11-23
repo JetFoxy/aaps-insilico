@@ -164,7 +164,11 @@ def _coverage(stats: dict[str, dict], decisions: list[DecisionRecord]) -> float:
 
 def _verdict(stats: dict[str, dict], decisions: list[DecisionRecord]) -> tuple[bool, str]:
     coverage = _coverage(stats, decisions)
-    failures = [name for name in MAIN_FIELDS if stats[name]["match"] < 1.0]
+    failures = [
+        name
+        for name, row in stats.items()
+        if name not in ("unmatched", "skipped") and row["n"] > 0 and row["match"] < 1.0
+    ]
     parts: list[str] = []
     if coverage < 0.95:
         parts.append(f"покрытие {coverage:.1%}")
