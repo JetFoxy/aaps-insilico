@@ -2,6 +2,7 @@
 """Normalize Nightscout documents into a replayable day trace."""
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -314,8 +315,18 @@ def _parse_treatments(
                 Treatment(ts=ts, kind="temp_target", duration_min=duration, meta=meta)
             )
         elif event == "profile switch":
+            meta: dict = {}
             profile = raw.get("profile")
-            meta = {"profile": str(profile)} if profile else {}
+            if profile:
+                meta["profile"] = str(profile)
+            percentage = _as_float(raw.get("percentage"))
+            if percentage is not None:
+                meta["percentage"] = percentage
+            profile_json = raw.get("profileJson")
+            if isinstance(profile_json, dict):
+                meta["profileJson"] = profile_json
+            elif isinstance(profile_json, str) and profile_json.strip():
+                meta["profileJson"] = profile_json
             parsed.append(Treatment(ts=ts, kind="profile_switch", meta=meta))
         else:
             parsed.append(Treatment(ts=ts, kind="note", origin="manual"))
@@ -345,6 +356,66 @@ def _unit_factor(units: str) -> float | None:
     return None
 
 
+def _profile_values(doc: object) -> tuple[dict, str, str] | None:
+    if not isinstance(doc, dict):
+        return None
+    store = doc.get("store")
+    values: dict = {}
+    if isinstance(store, dict):
+        preferred = store.get(doc.get("defaultProfile"))
+        if isinstance(preferred, dict):
+            values = preferred
+        else:
+            values = next((item for item in store.values() if isinstance(item, dict)), {})
+    elif isinstance(doc.get("profile"), dict):
+        values = doc["profile"]
+    else:
+        values = doc
+    if not any(key in values for key in ("basal", "sens", "carbratio", "carb_ratio")):
+        return None
+    units = str(values.get("units") or doc.get("units") or "mg/dL")
+    zone = str(values.get("timezone") or doc.get("timezone") or "UTC")
+    return values, units, zone
+
+
+def _segment_from_values(
+    start_ms: int,
+    values: dict,
+    units: str,
+    zone: str,
+    previous: ProfileSegment | None,
+) -> ProfileSegment:
+    factor = MGDL_PER_MMOL if units.lower() == "mmol" else 1.0
+    carb_key = "carbratio" if "carbratio" in values else "carb_ratio"
+    basal = _curve(values["basal"], 1.0) if "basal" in values else _inherited(previous, "basal")
+    sens = _curve(values["sens"], factor) if "sens" in values else _inherited(previous, "sens")
+    carb_ratio = (
+        _curve(values[carb_key], 1.0)
+        if carb_key in values
+        else _inherited(previous, "carb_ratio")
+    )
+    target_low = (
+        _curve(values["target_low"], factor)
+        if "target_low" in values
+        else _inherited(previous, "target_low")
+    )
+    target_high = (
+        _curve(values["target_high"], factor)
+        if "target_high" in values
+        else _inherited(previous, "target_high")
+    )
+    return ProfileSegment(
+        start_ms=start_ms,
+        basal=basal,
+        sens=sens,
+        carb_ratio=carb_ratio,
+        target_low=target_low,
+        target_high=target_high,
+        units=units,
+        timezone=zone,
+    )
+
+
 def _parse_profiles(docs: list[dict], timezone: str | None) -> list[ProfileSegment]:
     parsed: list[tuple[int, dict, str, str]] = []
     for doc in docs:
@@ -353,52 +424,87 @@ def _parse_profiles(docs: list[dict], timezone: str | None) -> list[ProfileSegme
         start = _as_ms(doc.get("startDate"))
         if start is None:
             start = _as_ms(doc.get("created_at")) or 0
-        store = doc.get("store")
-        values: dict = {}
-        if isinstance(store, dict):
-            preferred = store.get(doc.get("defaultProfile"))
-            if isinstance(preferred, dict):
-                values = preferred
-            else:
-                values = next((item for item in store.values() if isinstance(item, dict)), {})
-        units = str(values.get("units") or "mg/dL")
-        zone = timezone or str(values.get("timezone") or "UTC")
-        parsed.append((start, values, units, zone))
+        extracted = _profile_values(doc)
+        if extracted is None:
+            continue
+        values, units, zone = extracted
+        parsed.append((start, values, units, timezone or zone))
     parsed.sort(key=lambda item: item[0])
     segments: list[ProfileSegment] = []
     for start, values, units, zone in parsed:
-        factor = MGDL_PER_MMOL if units.lower() == "mmol" else 1.0
         previous = segments[-1] if segments else None
-        basal = _curve(values["basal"], 1.0) if "basal" in values else _inherited(previous, "basal")
-        sens = _curve(values["sens"], factor) if "sens" in values else _inherited(previous, "sens")
-        carb_ratio = (
-            _curve(values["carbratio"], 1.0)
-            if "carbratio" in values
-            else _inherited(previous, "carb_ratio")
-        )
-        target_low = (
-            _curve(values["target_low"], factor)
-            if "target_low" in values
-            else _inherited(previous, "target_low")
-        )
-        target_high = (
-            _curve(values["target_high"], factor)
-            if "target_high" in values
-            else _inherited(previous, "target_high")
-        )
-        segments.append(
-            ProfileSegment(
-                start_ms=start,
-                basal=basal,
-                sens=sens,
-                carb_ratio=carb_ratio,
-                target_low=target_low,
-                target_high=target_high,
-                units=units,
-                timezone=zone,
-            )
-        )
+        segments.append(_segment_from_values(start, values, units, zone, previous))
     return segments
+
+
+def _switch_values(raw: object) -> tuple[dict, str, str] | None:
+    if isinstance(raw, dict):
+        return _profile_values(raw)
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(decoded, str):
+        try:
+            decoded = json.loads(decoded)
+        except json.JSONDecodeError:
+            return None
+    return _profile_values(decoded)
+
+
+def _scale(value: float, factor: float) -> float:
+    return value * factor
+
+
+def _scale_curve(points: list[tuple[int, float]], factor: float) -> list[tuple[int, float]]:
+    return [(minute, _scale(value, factor)) for minute, value in points]
+
+
+def _apply_profile_switches(
+    treatments: list[Treatment],
+    segments: list[ProfileSegment],
+    warnings: list[str],
+) -> list[ProfileSegment]:
+    switches = [treatment for treatment in treatments if treatment.kind == "profile_switch"]
+    if not switches:
+        return segments
+    applied = 0
+    unusable = 0
+    for switch in sorted(switches, key=lambda item: item.ts):
+        extracted = _switch_values(switch.meta.get("profileJson"))
+        if extracted is None:
+            unusable += 1
+            continue
+        values, units, zone = extracted
+        previous = None
+        for segment in segments:
+            if segment.start_ms > switch.ts:
+                break
+            previous = segment
+        segment = _segment_from_values(
+            switch.ts, values, units, zone or trace_timezone(segments), previous
+        )
+        percentage = _as_float(switch.meta.get("percentage"))
+        if percentage is not None and 0 < percentage != 100:
+            basal_factor = percentage / 100.0
+            insulin_factor = 100.0 / percentage
+            segment.basal = _scale_curve(segment.basal, basal_factor)
+            segment.sens = _scale_curve(segment.sens, insulin_factor)
+            segment.carb_ratio = _scale_curve(segment.carb_ratio, insulin_factor)
+        segments.append(segment)
+        applied += 1
+    segments.sort(key=lambda item: item.start_ms)
+    if applied:
+        warnings.append(f"profile switches applied: {applied}")
+    if unusable:
+        warnings.append(f"profile switches without usable profileJson: {unusable}")
+    return segments
+
+
+def trace_timezone(segments: list[ProfileSegment]) -> str:
+    return segments[0].timezone if segments else "UTC"
 
 
 def _inherited(previous: ProfileSegment | None, name: str) -> list[tuple[int, float]]:
@@ -472,6 +578,7 @@ def build_trace(
     segments = _parse_profiles(profiles, timezone)
     parsed_treatments, treatment_warnings = _parse_treatments(treatments, segments)
     warnings.extend(treatment_warnings)
+    segments = _apply_profile_switches(parsed_treatments, segments, warnings)
     if not segments:
         warnings.append("no profile")
     if not devicestatus:

@@ -214,6 +214,8 @@ def _basal_schedule(trace, basal_at_start: float) -> list[list[int | float]]:
             if index + 1 < len(trace.profiles)
             else None
         )
+        if trace.window_start <= segment.start_ms <= trace.window_end:
+            blocks[segment.start_ms] = segment.basal_at(segment.start_ms)
         day = _local_date(trace.window_start, segment.timezone)
         last_day = _local_date(trace.window_end, segment.timezone)
         while day <= last_day:

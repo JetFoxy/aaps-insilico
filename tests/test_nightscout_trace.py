@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from nightscout.trace import build_trace
@@ -107,6 +109,45 @@ def test_temp_target_unknown_units_are_not_guessed():
                         devicestatus=[], window_start=T0, window_end=T0 + 1)
     assert trace.active_temp_target(T0 + MIN) == (5.0, 6.0)
     assert any("temp target" in w for w in trace.warnings)
+
+def test_profile_switch_applies_profile_json_and_percentage():
+    import json
+
+    doc = profile_doc(T0, 5.0, 10.0, 1.0)
+    switch_ts = T0 + 60 * MIN
+    treatments = [{
+        "eventType": "Profile Switch", "date": switch_ts, "profile": "Evening",
+        "percentage": 90, "profileJson": json.dumps(doc),
+    }]
+    trace = build_trace(
+        entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+        treatments=treatments,
+        profiles=[profile_doc(T0 - 86_400_000, 5.0, 10.0, 1.0)],
+        devicestatus=[], window_start=T0, window_end=T0 + 3 * 3600_000,
+    )
+    before = trace.profile_at(T0)
+    after = trace.profile_at(switch_ts + MIN)
+    assert after.start_ms == switch_ts
+    assert before.basal[0][1] == 1.0
+    assert after.basal[0][1] == pytest.approx(0.9)
+    assert after.sens[0][1] == pytest.approx(90.0 * 100 / 90)
+    assert after.carb_ratio[0][1] == pytest.approx(10.0 * 100 / 90)
+    assert after.target_low[0][1] == pytest.approx(99.0)
+    assert any("profile switches applied: 1" in w for w in trace.warnings)
+
+
+def test_profile_switch_without_usable_json_is_reported():
+    treatments = [{
+        "eventType": "Profile Switch", "date": T0 + 30 * MIN,
+        "profile": "Evening", "percentage": 80, "profileJson": "not json",
+    }]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+                        treatments=treatments,
+                        profiles=[profile_doc(T0 - 86_400_000, 5.0, 10.0, 1.0)],
+                        devicestatus=[], window_start=T0, window_end=T0 + 2 * 3600_000)
+    assert all(segment.start_ms < T0 + 30 * MIN for segment in trace.profiles)
+    assert any("without usable profileJson" in w for w in trace.warnings)
+
 
 def test_history_start_keeps_pre_window_cgm_points():
     entries = [

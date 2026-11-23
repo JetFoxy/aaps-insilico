@@ -171,6 +171,39 @@ def test_replay_uses_recorded_decision_times():
     assert times == [T0 + 2 * MIN, T0 + 5 * MIN, T0 + 9 * MIN]
 
 
+def test_replay_uses_the_profile_active_after_a_switch():
+    import json
+
+    entries = [{"type": "sgv", "date": T0 + i * MIN, "sgv": 120} for i in range(0, 41, 2)]
+    baseline = {"startDate": T0 - 86_400_000, "defaultProfile": "Main", "store": {"Main": {
+        "units": "mmol", "timezone": "UTC",
+        "sens": [{"time": "00:00", "value": 5.0}],
+        "carbratio": [{"time": "00:00", "value": 10.0}],
+        "basal": [{"time": "00:00", "value": 1.0}],
+        "target_low": [{"time": "00:00", "value": 5.5}],
+        "target_high": [{"time": "00:00", "value": 7.0}],
+    }}}
+    evening = {"startDate": T0, "defaultProfile": "Evening", "store": {"Evening": {
+        "units": "mmol", "timezone": "UTC",
+        "sens": [{"time": "00:00", "value": 10.0}],
+        "carbratio": [{"time": "00:00", "value": 10.0}],
+        "basal": [{"time": "00:00", "value": 1.0}],
+        "target_low": [{"time": "00:00", "value": 5.5}],
+        "target_high": [{"time": "00:00", "value": 7.0}],
+    }}}
+    treatments = [{"eventType": "Profile Switch", "date": T0 + 10 * MIN,
+                   "profile": "Evening", "profileJson": json.dumps(evening)}]
+    trace = build_trace(entries=entries, treatments=treatments, profiles=[baseline],
+                        devicestatus=[], window_start=T0, window_end=T0 + 30 * MIN)
+    bridge = FakeBridge()
+    run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    cycles = [r for r in bridge.requests if r["cmd"] == "cycle"]
+    before = next(r for r in cycles if r["now"] == T0)
+    after = next(r for r in cycles if r["now"] == T0 + 10 * MIN)
+    assert before["isf"] == 90.0
+    assert after["isf"] == 180.0
+
+
 def test_smb_off_disables_micro_bolus():
     trace = make_trace()
     bridge = FakeBridge()

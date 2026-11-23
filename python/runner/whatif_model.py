@@ -292,6 +292,16 @@ def run_model(
     )
     if excluded:
         warnings.append(f"excluded loop boluses: {excluded}")
+    switches = sum(
+        1 for treatment in trace.treatments
+        if trace.window_start <= treatment.ts <= trace.window_end
+        and treatment.kind == "profile_switch"
+    )
+    if switches:
+        warnings.append(
+            f"profile switches in window: {switches}; "
+            "model keeps the profile active at window_start"
+        )
     warnings.extend(f"trace: {warning}" for warning in trace.warnings)
     return ModelResult(
         match=match,
