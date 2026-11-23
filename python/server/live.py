@@ -384,11 +384,24 @@ def _cycle_frame(index: int, label: str, cycle) -> dict:
     }
 
 
+def _integrate_basal(cycles: list, window_end: int) -> float:
+    """Basal units from each cycle rate over the delta to the next cycle and the window tail."""
+    units = 0.0
+    for index, cycle in enumerate(cycles):
+        rate = cycle.rate
+        if rate is None:
+            continue
+        start = int(cycle.ts)
+        following = int(cycles[index + 1].ts) if index + 1 < len(cycles) else int(window_end)
+        end = max(start, min(int(window_end), following))
+        units += float(rate) * (end - start) / 3_600_000
+    return units
+
+
 def _variant_metrics(spec: dict, result) -> dict:
-    cadence = float(spec["cadence_min"])
     cycles = list(result.cycles)
     smb_units = sum(cycle.smb for cycle in cycles)
-    basal_units = sum((cycle.rate or 0.0) for cycle in cycles) * cadence / 60.0
+    basal_units = _integrate_basal(cycles, int(spec["trace"].window_end))
     iob_values = [cycle.iob for cycle in cycles if cycle.iob is not None]
     metrics = {
         "cycles": len(cycles),

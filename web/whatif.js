@@ -828,10 +828,17 @@
       { length: insulinBuckets },
       () => ({ basal: 0, smb: 0 }),
     ));
-    state.series.forEach((series, index) => series.forEach((cycle) => {
+    state.series.forEach((series, index) => series.forEach((cycle, cycleIndex) => {
       const bucket = Math.floor((Number(cycle.ts) - start) / 3_600_000);
       if (bucket < 0 || bucket >= insulinBuckets) return;
-      const basal = (Number(cycle.rate) || 0) * (Number(run.cadence) || 5) / 60;
+      const following = cycleIndex + 1 < series.length
+        ? Number(series[cycleIndex + 1].ts)
+        : Number(run.windowEnd);
+      const cycleStart = Number(cycle.ts);
+      const cycleEnd = Number.isFinite(following)
+        ? Math.max(cycleStart, Math.min(Number(run.windowEnd) || following, following))
+        : cycleStart;
+      const basal = (Number(cycle.rate) || 0) * (cycleEnd - cycleStart) / 3_600_000;
       buckets[index][bucket].basal += basal;
       buckets[index][bucket].smb += Number(cycle.smb) || 0;
     }));

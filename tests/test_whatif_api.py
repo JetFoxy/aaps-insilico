@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import server.live as live
 from nightscout.trace import build_trace
 from nightscout_stub import StubNightscout
-from runner.replay_loop import ReplayCycle, ReplayResult
+from runner.replay_loop import ReplayCycle, ReplayResult, ReplayVariant
 
 T0 = 1_790_000_000_000
 MIN = 60_000
@@ -123,6 +123,26 @@ def fake_cycles(variant):
             sensitivity_ratio=0.95, reason="test",
         ),
     ], skipped=[], warnings=["excluded loop boluses: 1"])
+
+
+def test_variant_metrics_integrate_basal_over_cycle_deltas():
+    trace = make_trace()
+    cycles = [
+        ReplayCycle(ts=T0, glucose=120.0, rate=1.0, smb=0.0, insulin_req=0.0,
+                    final_isf=50.0, factors={}, iob=1.0, eventual_bg=None,
+                    sensitivity_ratio=None, reason=""),
+        ReplayCycle(ts=T0 + 2 * MIN, glucose=121.0, rate=1.0, smb=0.0, insulin_req=0.0,
+                    final_isf=50.0, factors={}, iob=1.0, eventual_bg=None,
+                    sensitivity_ratio=None, reason=""),
+        ReplayCycle(ts=T0 + 3 * MIN, glucose=122.0, rate=1.0, smb=0.0, insulin_req=0.0,
+                    final_isf=50.0, factors={}, iob=1.0, eventual_bg=None,
+                    sensitivity_ratio=None, reason=""),
+    ]
+    result = ReplayResult(variant=ReplayVariant(label="A"), cycles=cycles, skipped=[], warnings=[])
+    spec = {"cadence_min": 5.0, "mode": "replay", "trace": trace}
+    metrics = live._variant_metrics(spec, result)
+    assert metrics["basal_units"] == 0.5
+    assert metrics["total_units"] == 0.5
 
 
 def test_import_builds_trace_and_hides_network_secrets():
