@@ -139,6 +139,26 @@ def test_in_window_untyped_bolus_is_included_with_warning():
     assert any("unclassified" in w for w in result.warnings)
 
 
+def test_replay_uses_recorded_decision_times():
+    trace = make_trace()
+    from nightscout.trace import DecisionRecord
+    trace.decisions = [
+        DecisionRecord(ts=T0 + 2 * MIN, deliver_at=T0 + 2 * MIN, insulin_req=0.1,
+                       final_isf=1.0, factors={}, smb_on=False, rate=None,
+                       eventual_bg=None, sensitivity_ratio=None),
+        DecisionRecord(ts=T0 + 5 * MIN, deliver_at=T0 + 5 * MIN, insulin_req=0.1,
+                       final_isf=1.0, factors={}, smb_on=False, rate=None,
+                       eventual_bg=None, sensitivity_ratio=None),
+        DecisionRecord(ts=T0 + 9 * MIN, deliver_at=T0 + 9 * MIN, insulin_req=0.1,
+                       final_isf=1.0, factors={}, smb_on=False, rate=None,
+                       eventual_bg=None, sensitivity_ratio=None),
+    ]
+    bridge = FakeBridge()
+    run_replay(trace, {}, {"label": "x"}, ReplayVariant(label="A"), bridge)
+    times = [r["now"] for r in bridge.requests if r["cmd"] == "cycle"]
+    assert times == [T0 + 2 * MIN, T0 + 5 * MIN, T0 + 9 * MIN]
+
+
 def test_smb_off_disables_micro_bolus():
     trace = make_trace()
     bridge = FakeBridge()

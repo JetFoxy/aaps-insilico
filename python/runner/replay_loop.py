@@ -303,9 +303,18 @@ def run_replay(
     step_ms = int(cadence_min * 60_000)
     if step_ms <= 0:
         raise ValueError("cadence_min must be positive")
+    decision_times = sorted({
+        decision.deliver_at for decision in trace.decisions
+        if trace.window_start <= decision.deliver_at <= trace.window_end
+    })
+    if decision_times:
+        points = decision_times
+    else:
+        points = list(
+            range(trace.window_start, trace.window_end + 1, step_ms)
+        )
 
-    now = trace.window_start
-    while now <= trace.window_end:
+    for now in points:
         while pending < len(in_window) and in_window[pending].ts <= now:
             converted = _real_treatment(in_window[pending])
             if converted is not None:
@@ -316,7 +325,6 @@ def run_replay(
                     if window_lo <= entry.ts <= now]
         if not readings or readings[-1][0] < now - CGM_GAP_MS:
             result.skipped.append(now)
-            now += step_ms
             continue
         readings.reverse()
 
@@ -390,7 +398,6 @@ def run_replay(
         rt = response.get("rt")
         if not isinstance(rt, dict):
             result.warnings.append(f"cycle at {now} returned no decision")
-            now += step_ms
             continue
         smb = _float(rt.get("units")) or 0.0
         rate = _float(rt.get("rate"))
@@ -431,7 +438,6 @@ def run_replay(
                 "duration": int(duration_min * 60_000),
                 "rate": rate, "isAbsolute": True, "isValid": True,
             })
-        now += step_ms
 
     if result.skipped:
         result.warnings.append(f"cgm gap: {len(result.skipped)} cycles skipped")
