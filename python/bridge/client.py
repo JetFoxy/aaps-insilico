@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 import sys
 from pathlib import Path
 
@@ -44,6 +45,7 @@ class Bridge:
         path = Path(classpath or os.environ.get("SIM_CLASSPATH", DEFAULT_CLASSPATH))
         if not path.exists():
             raise BridgeError(f"classpath file not found: {path}; run :sim-bridge:simClasspath")
+        self._stderr_tail: list[str] = []
         self.process = subprocess.Popen(
             [os.environ.get("SIM_JAVA", DEFAULT_JAVA), "-cp", path.read_text().strip(), "app.aaps.sim.SimBridgeKt"],
             stdin=subprocess.PIPE,
@@ -52,6 +54,18 @@ class Bridge:
             text=True,
             bufsize=1,
         )
+        # A pipe nobody reads fills up at ~64 KB and then the JVM blocks on write, so the bridge
+        # stops answering and the caller waits in readline() forever. Always drain it; forward it
+        # only when SIM_LOG=1, and keep the tail for the error message.
+        def drain() -> None:
+            if self.process.stderr is None:
+                return
+            for line in self.process.stderr:
+                self._stderr_tail.append(line)
+                del self._stderr_tail[:-400]
+                if os.environ.get("SIM_LOG") == "1":
+                    sys.stderr.write(line)
+        threading.Thread(target=drain, daemon=True).start()
 
     def request(self, payload: dict) -> dict:
         if self.process.stdin is None or self.process.stdout is None:
@@ -60,8 +74,7 @@ class Bridge:
         self.process.stdin.flush()
         line = self.process.stdout.readline()
         if not line:
-            stderr = self.process.stderr.read() if self.process.stderr else ""
-            raise BridgeError(f"bridge died: {stderr[-4000:]}")
+            raise BridgeError(f"bridge died: {''.join(self._stderr_tail)[-4000:]}")
         response = json.loads(line)
         if "error" in response:
             raise BridgeError(response["error"])

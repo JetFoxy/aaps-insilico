@@ -264,13 +264,22 @@ class Bridge {
         }
 
         val iobResponse = iob(request)
+        val mealResponse = meal(request)
+        val iobNow = (iobResponse["iob"] as? JsonArray)?.firstOrNull()?.jsonObject?.get("iob")?.jsonPrimitive?.doubleOrNull ?: 0.0
+        val cobNow = (mealResponse?.get("mealCOB") as? JsonPrimitive)?.doubleOrNull ?: 0.0
+        val carbsNow = (mealResponse?.get("carbs") as? JsonPrimitive)?.doubleOrNull ?: 0.0
+        val announced = cobNow >= 0.5 || carbsNow >= 1.0
+        val autoisfRequest = JsonObject(request.toMutableMap().apply {
+            put("iobNow", JsonPrimitive(iobNow))
+            put("cobNow", JsonPrimitive(cobNow))
+            put("announcedCarbs", JsonPrimitive(announced))
+        })
         val algorithm = when (algorithmName) {
             null -> null
-            "autoisf" -> autoisf(request)
+            "autoisf" -> autoisf(autoisfRequest)
             "dynisf" -> dynisf(request)
             else -> error("unknown algorithm: $algorithmName")
         }
-        val mealResponse = if (request.str("mealMode") == "announced") meal(request) else null
         val inputMap = request.obj("input")!!.toMutableMap()
         val algorithmSens = (algorithm?.get("sens") as? JsonPrimitive)?.doubleOrNull
         if (algorithmSens != null && algorithmSens.isFinite() && algorithmSens > 0.0) {
@@ -282,10 +291,7 @@ class Bridge {
         val stepInput = JsonObject(inputMap.apply {
             put("glucoseStatus", glucoseResponse["glucose"] ?: JsonNull)
             put("iob", iobResponse["iob"] ?: JsonNull)
-            put("meal", mealResponse ?: JsonObject(mapOf(
-                "carbs" to JsonPrimitive(0.0),
-                "mealCOB" to JsonPrimitive(0.0),
-            )))
+            put("meal", mealResponse)
         })
         val stepRequest = JsonObject(request.toMutableMap().apply { put("input", stepInput) })
         val stepResponse = if (algorithmName == "dynisf") stepSmb(stepRequest) else step(stepRequest)
@@ -399,7 +405,7 @@ class Bridge {
                 duration = tt.long("duration"),
             )
         }
-        val sens = autoIsf.autoIsf(now, effective, tempTarget)
+        val sens = autoIsf.autoIsf(now, effective, tempTarget, request.num("iobNow", 0.0), request.bool("announcedCarbs", false), request.num("tdd", 0.0), request.num("cob", request.num("cobNow", 0.0)))
         val status = pipeline.calculator.getGlucoseStatusData(allowOldData = false)
         return buildJsonObject {
             put("sens", sens)
