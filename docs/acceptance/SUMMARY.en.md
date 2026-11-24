@@ -103,8 +103,26 @@ Exercise: ΔTIR −0.002 pp (p = 0.014–0.19), ΔTBR +0.0034, ΔSMB −4.3, Δd
 stable across seeds (spread ≤ 0.1 pp) and matches A2's 30-subject result to within 0.1 pp / 0.1 U;
 at n = 120 the FCL TIR loss becomes statistically significant.
 
+## What-if (W1–W4)
+
+- **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
+  8 h lookback, normalized trace (profile switches, TT, autosens, SMB, short temp basal). Accepted.
+- **W2 replay parity:** the real CGM stays pinned; decisions are compared to `openaps.suggested`
+  with fixed tolerances and per-field denominators. In-window coverage is 100%; `final_isf` 31.6%,
+  `insulin_req` 43.1%, `rate` 37.2%, `smb_on` 62.8%, with an `acceIsf` residual. **Not accepted** —
+  absolute AAPS parity is not claimed; every variant shares the same pipeline, so relative deltas
+  are the intended output.
+- **W3 model:** a cohort subject is matched on log TDI/CR/ISF, warmed up with real pre-window events,
+  and metrics are computed on the unshifted model glucose. Accepted as an engine and an illustration
+  only (distance ~0.5, low confidence; model TIR 34.4% vs real 94.5%).
+- **W4 UI:** import, modes, variants, charts, metrics, delete, and privacy checks on a synthetic
+  stub. Accepted.
+
+Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
+`docs/superpowers/plans/2026-11-23-whatif-nightscout.md`.
+
 ## Reproducibility
 
 - Seeds: cohort perturbation (`--cohort-seed`), CGM noise (`crc32(subject)`), bootstrap (fixed).
 - Every comparison uses paired runs with identical CGM seeds.
-- 57 tests; `pytest tests/ -q`.
+- 154 tests; `pytest tests/ -q`.

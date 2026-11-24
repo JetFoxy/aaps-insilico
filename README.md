@@ -30,6 +30,9 @@ algorithm variants under identical scenarios.
   A20 (DynISF under faults, 30 subjects).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
+- What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented
+  residual), W3 (model — illustration only), W4 (web UI). Reports:
+  [`docs/acceptance/W1.md`](docs/acceptance/W1.md)–[`docs/acceptance/W4.md`](docs/acceptance/W4.md).
 
 ## Quickstart
 
@@ -81,6 +84,35 @@ python3 python/server/live.py --port 8766
 open http://127.0.0.1:8766/?live=1
 ```
 
+## What-if on your own Nightscout data
+
+`/whatif.html` imports your own Nightscout trace and runs it through the real AAPS algorithm in two
+modes:
+
+- **Replay** — your CGM stays pinned; the algorithm recomputes basal/SMB decisions with the chosen
+  settings. It shows what the algorithm would have delivered, not what glucose would have done.
+- **Model** — a cohort subject matched to your TDI/CR/ISF simulates glucose from your real meals and
+  boluses. This is a model, not a forecast.
+
+Input: Nightscout URL + read-only token, 3 days by default (up to 14), and the AAPS settings export
+(JSON + password) for the algorithm weights and `ICfg`. The profile comes from Nightscout. Variants:
+off / autoISF / DynISF, SMB on/off, autoISF weights and profile overrides.
+
+Privacy: the token and password stay in memory for one import; no disk cache; the server binds to
+`127.0.0.1`. Real traces are never committed (`data/raw/` is gitignored).
+
+```bash
+python3 python/server/live.py --port 8766
+open http://127.0.0.1:8766/whatif.html
+```
+
+Acceptance: W1 import, W2 replay parity, W3 model match, W4 UI (`docs/acceptance/W1.md`–`W4.md`).
+W2 is **red**: in-window coverage is 100% and the CGM input matches, but factor-level parity
+(`acceIsf`) is limited by the UKF layer — absolute reproduction of AAPS decisions is not claimed.
+W3 is an illustration: the matched subject is far from the user (distance ~0.5) and the model line is
+labelled as such. Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
+`docs/superpowers/plans/2026-11-23-whatif-nightscout.md`.
+
 ## Parameters
 
 Cohort size, CGM noise and algorithm preferences are shared CLI options in
@@ -130,11 +162,10 @@ The extended cohort perturbs only absorption parameters (`kabs`, `kmax`, `kmin`,
 same fasting glucose as its base subject. `Vmx`, `kp3`, `BW`, `Gb` and `u2ss` are not perturbed: the
 population vector for them is proprietary and re-equilibration is not validated.
 
-DynamicISF is **not** wired yet. `DetermineBasalSMB` takes a `dynIsfMode` flag, but the real plugin
-computes `variable_sens` from a TDD history (1-day, 7-day, last 24 h, last 4 h) through a private
-`calculateRawDynIsf` and a full service graph. Reimplementing that formula would violate the "no
-ported algorithms" rule, so DynISF needs a bridge adapter around the real plugin and a TDD feed from
-the simulated journal — a separate milestone.
+DynISF is wired through the bridge adapter (`bridge/.../DynIsfRunner.kt`), which calls the real
+`OpenAPSSMBPlugin`/`getIsfMgdl` instead of a reimplementation. Profile-sens mode is used
+(`dynisf_use_profile_sens`), with a constant TDD stub only to pass the `tddPartsCalculated()` gate;
+there is no TDD calculator. Comparisons A13–A20 cover off / autoISF / DynISF.
 
 ## Layout
 
@@ -145,10 +176,11 @@ the simulated journal — a separate milestone.
 | `python/exercise/` | intensity -> sensitivity, absorption, recovery tail |
 | `python/pump/` | dose quantization, limits, delivery delay |
 | `python/runner/` | closed loop, metrics, matrices, demo export |
+| `python/nightscout/` | Nightscout import, settings-export decrypt, trace normalization |
 | `python/golden/` | W1 replay and parity checks on recorded Nightscout data |
 | `bridge/` | JVM module with the real AAPS/autoISF code (copied into the AAPS worktree) |
 | `vendor/deichmann/` | second model for M8, BSD-3, original code |
-| `web/` | static demo UI |
+| `web/` | static demo UI and the what-if tab (`whatif.html`) |
 | `docs/` | design, parameter registry, per-milestone acceptance reports |
 
 ## W1 bridge
