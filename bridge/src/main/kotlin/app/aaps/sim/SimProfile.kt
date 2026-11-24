@@ -51,7 +51,6 @@ fun simEffectiveProfile(
             else -> currentBasal
         }
         "getBasalTimeFromMidnight" -> currentBasal
-        "getMaxDailyBasal" -> currentBasal * 24.0
         "getProfileIsfMgdl", "getIsfMgdl", "getAverageIsfMgdl" -> isfMgdl
         "getIsfMgdlForCarbs", "getIsfMgdlTimeFromMidnight" -> isfMgdl
         "getIc", "getIcTimeFromMidnight" -> carbRatio

@@ -86,9 +86,6 @@ class TimeVarying:
     risk_r2: float = 0.0
     gth: float = 60.0
     si_multipliers: tuple[float, float, float] | None = None
-    # Glucose toxicity / insulin resistance at high glucose: SI is multiplied by
-    # (1 - beta * clamp((G-150)/150, 0, 1)). 0 reproduces the original model.
-    si_bg_beta: float = 0.0
     exercise: ExerciseSession | None = None
     ka_multiplier: float = 1.0
     dawn_egp: float = 0.0
@@ -103,14 +100,7 @@ class TimeVarying:
     def clock(self, t: float) -> float:
         return (t + self.clock_offset_min) % 1440.0
 
-    def si(self, t: float, glucose_mgdl: float | None = None) -> float:
-        base = self._si_segment(t)
-        if self.si_bg_beta > 0.0 and glucose_mgdl is not None:
-            excess = min(1.0, max(0.0, (glucose_mgdl - 150.0) / 150.0))
-            base *= 1.0 - min(self.si_bg_beta, 0.8) * excess
-        return base
-
-    def _si_segment(self, t: float) -> float:
+    def si(self, t: float) -> float:
         if self.si_multipliers is None:
             return 1.0
         minute = self.clock(t)
@@ -169,7 +159,7 @@ class Core:
 
         rat = p["f"] * p["kabs"] * x[2] / p["BW"]
         ramp = tv.dawn_ramp(t)
-        si = tv.si(t, x[3] / p["Vg"]) * (tv.exercise.si_multiplier(t) if tv.exercise is not None else 1.0)
+        si = tv.si(t) * (tv.exercise.si_multiplier(t) if tv.exercise is not None else 1.0)
         egp = (p["kp1"] * tv.kp1_factor + tv.dawn_egp * ramp) - p["kp2"] * x[3] - p["kp3"] * tv.kp3_factor * si * x[8]
         uii = p["Fsnc"]
         e = p["ke1"] * (x[3] - p["ke2"]) if x[3] > p["ke2"] else 0.0

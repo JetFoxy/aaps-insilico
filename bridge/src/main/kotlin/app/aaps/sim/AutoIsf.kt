@@ -11,8 +11,6 @@ import app.aaps.core.interfaces.utils.HardLimits
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.constraints.ConstraintObject
 import app.aaps.plugins.aps.dynamiccr.DynamicCarbRatioCalculator
-import app.aaps.plugins.aps.openAPSSMB.ActivityClass
-import app.aaps.plugins.aps.openAPSSMB.ActivityClassificationProvider
 import app.aaps.plugins.aps.openAPSAutoISF.DetermineBasalAutoISF
 import app.aaps.plugins.aps.openAPSAutoISF.OpenAPSAutoISFPlugin
 import kotlinx.coroutines.runBlocking
@@ -32,7 +30,7 @@ class AutoIsfRunner(
     private val constraintsChecker: ConstraintsChecker =
         Proxy.newProxyInstance(ConstraintsChecker::class.java.classLoader, arrayOf(ConstraintsChecker::class.java)) { _, method, args ->
             when (method.name) {
-                "isAutosensModeEnabled" -> ConstraintObject(true, logger)
+                "isAutosensModeEnabled" -> ConstraintObject(false, logger)
                 "isUAMEnabled" -> ConstraintObject(true, logger)
                 "isSMBModeEnabled" -> ConstraintObject(true, logger)
                 "getMaxIOBAllowed" -> ConstraintObject(
@@ -66,11 +64,6 @@ class AutoIsfRunner(
             }
         } as app.aaps.core.interfaces.db.PersistenceLayer
 
-    private val activityClassificationProvider: ActivityClassificationProvider = object : ActivityClassificationProvider {
-        override suspend fun currentClass(): ActivityClass = ActivityClass.REST
-        override fun isTargetOffsetEnabled(): Boolean = false
-    }
-
     private val plugin: OpenAPSAutoISFPlugin = OpenAPSAutoISFPlugin(
         aapsLogger = logger,
         rxBus = anyProxy(app.aaps.core.interfaces.rx.bus.RxBus::class.java) as app.aaps.core.interfaces.rx.bus.RxBus,
@@ -90,21 +83,19 @@ class AutoIsfRunner(
         bgQualityCheck = anyProxy(app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck::class.java) as app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck,
         notificationManager = anyProxy(app.aaps.core.interfaces.notifications.NotificationManager::class.java) as app.aaps.core.interfaces.notifications.NotificationManager,
         determineBasalAutoISF = DetermineBasalAutoISF(profileUtilProxy()).also { it.preferences = preferences },
+        profiler = anyProxy(app.aaps.core.interfaces.profiling.Profiler::class.java) as app.aaps.core.interfaces.profiling.Profiler,
         glucoseStatusCalculatorAutoIsf = pipeline.calculator,
         apsResultProvider = { anyProxy(APSResult::class.java) as APSResult },
         ch = anyProxy(app.aaps.core.interfaces.insulin.ConcentrationHelper::class.java) as app.aaps.core.interfaces.insulin.ConcentrationHelper,
         dynamicCarbRatioCalculator = DynamicCarbRatioCalculator(),
         tddCalculator = anyProxy(app.aaps.core.interfaces.stats.TddCalculator::class.java) as app.aaps.core.interfaces.stats.TddCalculator,
         insulin = anyProxy(app.aaps.core.interfaces.insulin.Insulin::class.java) as app.aaps.core.interfaces.insulin.Insulin,
-        activityClassificationProvider = activityClassificationProvider,
     )
 
-    fun autoIsf(now: Long, profile: Profile, tempTarget: TT?, iob: Double = 0.0, announcedCarbs: Boolean = false, tdd: Double = 0.0, cob: Double = 0.0): Double {
+    fun autoIsf(now: Long, profile: Profile, tempTarget: TT?): Double {
         clock.now = now
         activeTempTarget = tempTarget
-        val sens = runBlocking {
-            plugin.autoISF(profile, iob = iob, announcedCarbs = announcedCarbs, tdd = tdd, cob = cob)
-        }
+        val sens = runBlocking { plugin.autoISF(profile) }
         aivField().iobThEffective = effectiveIobThreshold()
         return sens
     }

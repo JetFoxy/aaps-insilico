@@ -27,8 +27,6 @@ import app.aaps.core.objects.constraints.ConstraintObject
 import app.aaps.core.objects.profile.ProfileSealed
 import app.aaps.plugins.aps.dynamiccr.DynamicCarbRatioCalculator
 import app.aaps.plugins.aps.openAPS.DeltaCalculator
-import app.aaps.plugins.aps.openAPSSMB.ActivityClass
-import app.aaps.plugins.aps.openAPSSMB.ActivityClassificationProvider
 import app.aaps.plugins.aps.openAPSSMB.DetermineBasalSMB
 import app.aaps.plugins.aps.openAPSSMB.GlucoseStatusCalculatorSMB
 import app.aaps.plugins.aps.openAPSSMB.OpenAPSSMBPlugin
@@ -120,11 +118,6 @@ class DynIsfRunner(
 
     private val smbDetermineBasal = DetermineBasalSMB(profileUtilProxy(), anyProxy(FabricPrivacy::class.java) as FabricPrivacy)
 
-    private val activityClassificationProvider: ActivityClassificationProvider = object : ActivityClassificationProvider {
-        override suspend fun currentClass(): ActivityClass = ActivityClass.REST
-        override fun isTargetOffsetEnabled(): Boolean = false
-    }
-
     private val plugin: OpenAPSSMBPlugin = OpenAPSSMBPlugin(
         aapsLogger = logger,
         rxBus = anyProxy(app.aaps.core.interfaces.rx.bus.RxBus::class.java) as app.aaps.core.interfaces.rx.bus.RxBus,
@@ -151,7 +144,6 @@ class DynIsfRunner(
         apsResultProvider = { anyProxy(APSResult::class.java) as APSResult },
         ch = anyProxy(app.aaps.core.interfaces.insulin.ConcentrationHelper::class.java) as app.aaps.core.interfaces.insulin.ConcentrationHelper,
         fabricPrivacy = anyProxy(FabricPrivacy::class.java) as FabricPrivacy,
-        activityClassificationProvider = activityClassificationProvider,
     )
 
     fun determine(

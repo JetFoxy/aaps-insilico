@@ -11,7 +11,6 @@ dependencies {
     implementation(project(":plugins:aps"))
     implementation(project(":plugins:main"))
     implementation(project(":plugins:smoothing"))
-    implementation(project(":plugins:sensitivity"))
     implementation(project(":workflow"))
     implementation(project(":implementation"))
     implementation(libs.kotlinx.coroutines.core)

@@ -77,8 +77,6 @@ class SimIobCobCalculator(
         isTempTarget: Boolean,
     ): Array<IobTotal> = emptyArray()
 
-    override suspend fun apsResultsStored(oldest: Long) = Unit
-
     override fun iobArrayToString(array: Array<IobTotal>): String = array.joinToString()
 
     override fun clearCache() = Unit
@@ -128,8 +126,10 @@ class CobRunner(
             profileFunction = profileFunction(),
             profileUtil = profileUtilProxy(),
             preferences = preferences,
+            config = proxy(Config::class.java) { method, _ -> if (method.name == "getAAPSCLIENT") false else defaultValue(method.returnType) },
             profiler = proxy(Profiler::class.java) { _, _ -> Unit },
             decimalFormatter = ConsoleDecimalFormatter(),
+            processedDeviceStatusData = proxy(ProcessedDeviceStatusData::class.java) { _, _ -> null },
             scope = scope,
             autosensDataProvider = { AutosensDataObject(logger, preferences, dateUtil) },
         )
@@ -144,15 +144,12 @@ class CobRunner(
             limitDataToOldestAvailable = false,
             triggeredByNewBG = false,
             emitFinalProgress = false,
-            liveWindow = false,
         )
         return runBlocking {
             try {
                 invokeAutosens(runner, prepare)
             } catch (e: Throwable) {
-                val cause = (e as? java.lang.reflect.InvocationTargetException)?.targetException ?: e
-                logger.error("CobRunner failed: ${cause.javaClass.simpleName}: ${cause.message}", cause)
-                cause.printStackTrace()
+                logger.error("CobRunner failed: ${e.message}", e)
                 return@runBlocking null
             }
             val table = calculator.ads.autosensDataTable
@@ -184,7 +181,6 @@ class CobRunner(
                     carbs.filter { it.timestamp in from..to }
                 }
                 "getTherapyEventDataFromTime", "getProfileSwitchesFromTime" -> emptyList<Any>()
-                "getLoopSensitivities" -> emptyList<Any>()
                 "getBgReadingsDataFromTimeToTime" -> emptyList<Any>()
                 "getTemporaryTargetActiveAt" -> null
                 "toString" -> "PersistenceLayerStub"
@@ -203,26 +199,25 @@ class CobRunner(
             }
         }
 
-    /**
-     * The real oref1 sensitivity detection. A stub returning ratio 1.0 made every autosens run a no-op,
-     * which is exactly the blind spot this bench must not have.
-     */
-    private val sensitivity = app.aaps.plugins.sensitivity.SensitivityOref1Plugin(
-        logger,
-        textResolverProxy(),
-        preferences,
-        dateUtil,
-        proxy(app.aaps.core.interfaces.notifications.NotificationManager::class.java) { _, _ -> null },
-    )
-
-    private fun activePlugin(): ActivePlugin =
-        proxy<ActivePlugin>(ActivePlugin::class.java) { method, _ ->
+    private fun activePlugin(): ActivePlugin {
+        val sensitivity = proxy<app.aaps.core.interfaces.aps.Sensitivity>(app.aaps.core.interfaces.aps.Sensitivity::class.java) { method, _ ->
+            when (method.name) {
+                "isOref1" -> true
+                "isMinCarbsAbsorptionDynamic" -> false
+                "maxAbsorptionHours" -> 6.0
+                "detectSensitivity" -> AutosensResult(ratio = 1.0)
+                "toString" -> "SensitivityStub"
+                else -> defaultValue(method.returnType)
+            }
+        }
+        return proxy<ActivePlugin>(ActivePlugin::class.java) { method, _ ->
             when (method.name) {
                 "getActiveSensitivity" -> sensitivity
                 "toString" -> "ActivePluginStub"
                 else -> defaultValue(method.returnType)
             }
         }
+    }
 
     private fun overviewData(now: Long): OverviewData =
         proxy(OverviewData::class.java) { method, _ ->
