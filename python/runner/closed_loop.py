@@ -47,6 +47,7 @@ class Scenario:
     announce_amount_error_frac: float = 0.0
     announce_lead_min: float = 0.0
     si_multipliers: tuple[float, float, float] | None = None
+    si_bg_beta: float = 0.0
     dawn_egp: float = 0.0
 
 
@@ -175,7 +176,7 @@ def run_closed_loop(
             )
         time_varying = TimeVarying(
             exercise=exercise, clock_offset_min=t0,
-            si_multipliers=scenario.si_multipliers, dawn_egp=scenario.dawn_egp,
+            si_multipliers=scenario.si_multipliers, si_bg_beta=scenario.si_bg_beta, dawn_egp=scenario.dawn_egp,
         )
         boluses = []
         still_pending: list[tuple[float, float]] = []

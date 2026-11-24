@@ -51,6 +51,10 @@ fun simEffectiveProfile(
             else -> currentBasal
         }
         "getBasalTimeFromMidnight" -> currentBasal
+        // Autosens divides by this; a default 0.0 turns ratio into NaN (0/0) and aborts the whole
+        // autosens/COB chain at the first bucket. The schedule is flat in the bench, so 24 x the
+        // current rate is the daily basal.
+        "getMaxDailyBasal" -> currentBasal * 24.0
         "getProfileIsfMgdl", "getIsfMgdl", "getAverageIsfMgdl" -> isfMgdl
         "getIsfMgdlForCarbs", "getIsfMgdlTimeFromMidnight" -> isfMgdl
         "getIc", "getIcTimeFromMidnight" -> carbRatio
