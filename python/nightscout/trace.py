@@ -504,6 +504,7 @@ def _apply_profile_switches(
             segment.sens = _scale_curve(segment.sens, insulin_factor)
             segment.carb_ratio = _scale_curve(segment.carb_ratio, insulin_factor)
         segments.append(segment)
+        segments.sort(key=lambda item: item.start_ms)
         applied += 1
     segments.sort(key=lambda item: item.start_ms)
     if applied:

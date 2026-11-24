@@ -264,19 +264,43 @@ def test_expired_trace_is_pruned_on_access():
 
 def test_fetch_errors_never_echo_url_or_token(monkeypatch):
     class Broken:
-        def __init__(self, url, token=None):
+        def __init__(self, url, token=None, api_secret=None, **kwargs):
             self.url = url
 
         def status(self):
-            raise RuntimeError(f"boom tok-secret {self.url}")
+            raise RuntimeError(f"boom tok-secret api-secret-secret {self.url}")
 
     monkeypatch.setattr(live, "NightscoutClient", Broken)
     with pytest.raises(live.WhatifError) as exc:
-        live.whatif_fetch({"url": "https://nightscout.example", "token": "tok-secret", "days": 1})
+        live.whatif_fetch({
+            "url": "https://nightscout.example", "token": "tok-secret",
+            "api_secret": "api-secret-secret", "days": 1,
+        })
     text = str(exc.value)
     assert exc.value.status == 500
     assert "tok-secret" not in text
+    assert "api-secret-secret" not in text
     assert "nightscout.example" not in text
+
+
+def test_real_insulin_integrates_profile_and_temp_basal():
+    from nightscout.trace import build_trace
+
+    T0 = 1_790_000_000_000
+    MIN = 60_000
+    profiles = [{"startDate": T0 - 86_400_000, "defaultProfile": "Main", "store": {"Main": {
+        "units": "mmol", "timezone": "UTC",
+        "sens": [{"time": "00:00", "value": 5.0}],
+        "carbratio": [{"time": "00:00", "value": 10.0}],
+        "basal": [{"time": "00:00", "value": 1.0}],
+        "target_low": [{"time": "00:00", "value": 5.5}],
+        "target_high": [{"time": "00:00", "value": 5.5}],
+    }}}]
+    treatments = [{"eventType": "Temp Basal", "date": T0 + 30 * MIN, "absolute": 2.0, "duration": 60}]
+    trace = build_trace(entries=[], treatments=treatments, profiles=profiles,
+                        devicestatus=[], window_start=T0, window_end=T0 + 180 * MIN)
+    insulin = live._real_insulin(trace)
+    assert insulin["basal_units"] == pytest.approx(4.0)
 
 
 def test_options_expose_modes_algorithms_and_prefs():

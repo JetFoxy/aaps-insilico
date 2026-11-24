@@ -394,8 +394,38 @@ def _cycle_frame(index: int, label: str, cycle) -> dict:
     }
 
 
+def _real_basal_units(trace: DayTrace) -> float:
+    """Integrate the recorded temp basals and the profile basal over the import window."""
+    changes: dict[int, float] = {
+        int(trace.window_start): float(
+            trace.profile_at(trace.window_start).basal_at(trace.window_start)
+        )
+    }
+    temps = sorted(
+        (
+            treatment
+            for treatment in trace.treatments
+            if treatment.kind == "temp_basal"
+            and trace.window_start <= treatment.ts <= trace.window_end
+        ),
+        key=lambda item: item.ts,
+    )
+    for treatment in temps:
+        changes[int(treatment.ts)] = float(treatment.amount)
+        end = int(treatment.ts + treatment.duration_min * 60_000)
+        if end <= trace.window_end:
+            changes[end] = float(trace.profile_at(end).basal_at(end))
+    times = sorted(changes)
+    total = 0.0
+    for index, ts in enumerate(times):
+        end = times[index + 1] if index + 1 < len(times) else int(trace.window_end)
+        if end > ts:
+            total += changes[ts] * (end - ts) / 3_600_000
+    return total
+
+
 def _real_insulin(trace: DayTrace) -> dict:
-    """Recorded manual boluses and loop SMBs inside the import window."""
+    """Recorded manual boluses, loop SMBs and basal inside the import window."""
     manual_units = 0.0
     manual_count = 0
     smb_units = 0.0
@@ -420,6 +450,7 @@ def _real_insulin(trace: DayTrace) -> dict:
         "manual_count": manual_count,
         "smb_units": round(smb_units, 3),
         "smb_count": smb_count,
+        "basal_units": round(_real_basal_units(trace), 3),
         "events": events,
     }
 
@@ -716,7 +747,8 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 self._json({"error": _scrub(
                     f"{type(exc).__name__}: {exc}",
-                    payload.get("url"), payload.get("token"), payload.get("password"),
+                    payload.get("url"), payload.get("token"),
+                    payload.get("api_secret"), payload.get("password"),
                 )}, 500)
                 return
             self._json({"trace_id": trace_id, "summary": summary})

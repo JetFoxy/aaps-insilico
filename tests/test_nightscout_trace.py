@@ -136,6 +136,29 @@ def test_profile_switch_applies_profile_json_and_percentage():
     assert any("profile switches applied: 1" in w for w in trace.warnings)
 
 
+def test_profile_switch_inherits_from_the_latest_segment_not_the_last_appended():
+    import json
+
+    base = profile_doc(T0 - 86_400_000, 5.0, 10.0, 1.0)
+    later = profile_doc(T0 + 100 * MIN, 7.0, 12.0, 2.0)
+    treatments = [
+        {"eventType": "Profile Switch", "date": T0 + 60 * MIN, "profile": "Early",
+         "percentage": 100, "profileJson": json.dumps({"basal": [{"time": "00:00", "value": 1.5}],
+                                                       "units": "mmol", "timezone": "UTC"})},
+        {"eventType": "Profile Switch", "date": T0 + 120 * MIN, "profile": "Late",
+         "percentage": 100, "profileJson": json.dumps({"sens": [{"time": "00:00", "value": 6.0}],
+                                                       "units": "mmol", "timezone": "UTC"})},
+    ]
+    trace = build_trace(entries=[{"type": "sgv", "date": T0, "sgv": 100}],
+                        treatments=treatments, profiles=[base, later],
+                        devicestatus=[], window_start=T0, window_end=T0 + 3 * 3600_000)
+    assert [segment.start_ms for segment in trace.profiles] == sorted(
+        segment.start_ms for segment in trace.profiles
+    )
+    late = trace.profile_at(T0 + 121 * MIN)
+    assert late.basal[0][1] == 2.0
+
+
 def test_profile_switch_without_usable_json_is_reported():
     treatments = [{
         "eventType": "Profile Switch", "date": T0 + 30 * MIN,

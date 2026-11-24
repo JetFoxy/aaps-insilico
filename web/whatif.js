@@ -726,8 +726,8 @@
       addCell(row, fmt(real.smb_units, 2));
       addCell(row, fmt(real.smb_count, 0));
       addCell(row, fmt(real.manual_units, 2));
-      addCell(row, t("whatif.metrics.na"));
-      addCell(row, fmt(Number(real.manual_units) + Number(real.smb_units), 2));
+      addCell(row, fmt(real.basal_units, 2));
+      addCell(row, fmt(Number(real.manual_units) + Number(real.smb_units) + Number(real.basal_units), 2));
       addCell(row, t("whatif.metrics.na"));
       columns.slice(10).forEach(() => addCell(row, t("whatif.metrics.na")));
       body.appendChild(row);
