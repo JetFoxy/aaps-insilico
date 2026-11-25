@@ -108,7 +108,9 @@ open http://127.0.0.1:8766/whatif.html
 
 Acceptance: W1 import, W2 replay parity, W3 model match, W4 UI (`docs/acceptance/W1.md`–`W4.md`).
 W2 is **red**: in-window coverage is 100% and the CGM input matches, but factor-level parity
-(`acceIsf`) is limited by the UKF layer — absolute reproduction of AAPS decisions is not claimed.
+(`acceIsf`) is **pin-limited** — the bridge runs upstream AAPS `74271a544b`, while the trace was
+recorded by a newer production AAPS with the raw-observation estimator and autoISF IOB/COB inputs.
+Absolute reproduction of AAPS decisions is not claimed.
 W3 is an illustration: the matched subject is far from the user (distance ~0.5) and the model line is
 labelled as such. Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
 `docs/superpowers/plans/2026-11-23-whatif-nightscout.md`.

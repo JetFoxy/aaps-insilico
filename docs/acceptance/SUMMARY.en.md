@@ -110,7 +110,9 @@ at n = 120 the FCL TIR loss becomes statistically significant.
 - **W2 replay parity:** the real CGM stays pinned; decisions are compared to `openaps.suggested`
   with fixed tolerances and per-field denominators. In-window coverage is 100%; `final_isf` 31.6%,
   `insulin_req` 43.1%, `rate` 37.2%, `smb_on` 62.8%, with an `acceIsf` residual. **Not accepted** —
-  absolute AAPS parity is not claimed; every variant shares the same pipeline, so relative deltas
+  the residual is pin-limited: the bridge runs upstream AAPS `74271a544b`, while the trace was
+  recorded by a newer production AAPS with the raw-observation estimator and autoISF IOB/COB inputs.
+  Absolute AAPS parity is not claimed; every variant shares the same pipeline, so relative deltas
   are the intended output.
 - **W3 model:** a cohort subject is matched on log TDI/CR/ISF, warmed up with real pre-window events,
   and metrics are computed on the unshifted model glucose. Accepted as an engine and an illustration
