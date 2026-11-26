@@ -24,6 +24,7 @@ from runner.closed_loop import (
     run_closed_loop,
 )
 from runner.fidelity import SIGNATURES, evaluate, from_loop, in_real_range, report, trace
+from runner.metrics import compute_metrics
 from runner.options import RESIDUALS
 from simcore.variability import si_day
 from simcore.params import load_subjects
@@ -39,6 +40,16 @@ def meal_plan_for(mode: str, days: int, seed: int, body_weight: float):
     if mode == "template":
         return intake_schedule(days, seed ^ INTAKE_SEED_SALT, body_weight)
     return meals_for_days(MEALS, days), []
+
+
+def safety_from_loop(loop) -> dict:
+    """True-glucose safety metrics, the same rows the pre-registered gate reads."""
+    values = compute_metrics(
+        np.asarray(loop.glucose, dtype=float),
+        getattr(loop, "dose_events", []),
+        float(getattr(loop, "cadence_min", 5.0)),
+    )
+    return values.as_dict()
 
 
 def per_subject_stats(traces):
@@ -106,6 +117,7 @@ def run_subject(task):
     item.pop("sens", None)
     cgm_item = from_loop(loop)
     cgm_item["subject"] = name
+    cgm_item["safety"] = safety_from_loop(loop)
     return cgm_item, item
 
 
@@ -241,6 +253,10 @@ def main(argv: list[str] | None = None) -> int:
         "compression_rate": args.compression_rate,
         "meal_plan": args.meal_plan, "variability": args.variability,
         "per_subject": per_subject_stats(cgm),
+        "safety": [
+            {"subject": trace_item.get("subject", ""), **trace_item.get("safety", {})}
+            for trace_item in cgm
+        ],
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0

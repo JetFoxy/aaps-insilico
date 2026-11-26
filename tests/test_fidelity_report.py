@@ -6,7 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from runner.fidelity_report import compression_for, meal_plan_for, per_subject_stats
+from runner.fidelity_report import (
+    compression_for, meal_plan_for, per_subject_stats, safety_from_loop,
+)
 
 
 def test_compression_for_is_off_at_zero_and_carries_the_rate():
@@ -35,3 +37,17 @@ def test_per_subject_stats_keeps_the_subject_label_and_every_signature():
     assert rows[0]["subject"] == "adult#001"
     assert rows[0]["cv"] == 0.0
     assert set(rows[0]) == {"subject"} | {key for key, _ in SIGNATURES}
+
+
+def test_safety_from_loop_reports_gate_metrics():
+    from types import SimpleNamespace
+    import numpy as np
+
+    loop = SimpleNamespace(
+        glucose=np.full(288, 100.0), dose_events=[], cadence_min=5.0,
+    )
+    row = safety_from_loop(loop)
+    assert row["tir_70_180"] == 1.0
+    assert row["tbr_70"] == 0.0
+    assert row["minutes_below_54_per_day"] == 0.0
+    assert row["longest_below_54_min"] == 0.0
