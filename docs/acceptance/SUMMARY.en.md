@@ -1,5 +1,7 @@
 # Acceptance summary (English)
 
+English | [Русский](SUMMARY.ru.md)
+
 The full reports are in Russian next to this file (`A1.md` … `A28.md`, `M0.md` … `M8.md`,
 `W1.md` … `W4.md`). This page is the English entry point: what was built, what was measured, and
 how to read the numbers.
@@ -174,6 +176,24 @@ absorbs it with dose, as theory predicts. `drift` and `insulin_cv` estimate the 
 three weekly points, so their comparison with the real envelope is a lower bound, not a model
 verdict; TimSim also notes that `insulin_cv` is driver-specific. Report: `A28.md`.
 
+### A29 — scorecard with behaviour and compression
+
+Same 30 subjects × 22 days and 15 % drift, plus rescue carbohydrate and false CGM compressions at
+3.5 events per 30 days (the midpoint of the measured 1.9–5.3). `hypo_rec` 100.0 → **55.0 min**
+(real 50–59) and `compress` 0 → **4.09** (real 1.9–5.3): two gaps close with layers. `hypo_reb`
+64.1 stays outside (23.2–28.4) and `tail` gets worse, 7.87 → 8.32. Scorecard: **5 of 12**.
+Report: `A29.md`.
+
+### A30 — drift amplitude sweep
+
+Same 30 subjects × 22 days, no behaviour or compression, imposed weekly ISF drift of 8 / 15 / 22 %
+(the 15 % arm is A28's). Measured `drift` is 3.39 / 6.63 / 10.05 and `insulin_cv` 1.31 / 1.42 / 2.29;
+the ratio of measured to imposed drift is 0.42–0.46. The estimator consistently recovers about 44 %
+of the amplitude over three weekly points, so A28's below-envelope reading is an estimator limit,
+not a model result. At a 22 % amplitude the median `drift` (10.05) is inside the real 8.2–21.7 band,
+so the envelope is reachable; `insulin_cv` stays driver-specific and below range. Glucose does not
+move (`cv` 40.0–40.6, `hypo_rec` 100–105). Report: `A30.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
@@ -191,11 +211,10 @@ verdict; TimSim also notes that `insulin_cv` is driver-specific. Report: `A28.md
 - **W4 UI:** import, modes, variants, charts, metrics, delete, and privacy checks on a synthetic
   stub. Accepted.
 
-Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
-`docs/superpowers/plans/2026-11-23-whatif-nightscout.md`.
+Reports: `docs/acceptance/W1.md`–`W4.md`.
 
 ## Reproducibility
 
 - Seeds: cohort perturbation (`--cohort-seed`), CGM noise (`crc32(subject)`), bootstrap (fixed).
 - Every comparison uses paired runs with identical CGM seeds.
-- 198 tests; `pytest tests/ -q` (5 bridge tests are deselected by default; run them with `-m bridge`).
+- 199 tests; `pytest tests/ -q` (5 bridge tests are deselected by default; run them with `-m bridge`).

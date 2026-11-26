@@ -11,7 +11,7 @@ physical exercise.
 algorithm variants under identical scenarios.
 
 - Status: W1 accepted (bridge parity on recorded Nightscout data), milestones M0–M8 accepted,
-  comparisons A1–A28 accepted. The JVM bridge runs the real `UnscentedKalmanFilterPlugin`,
+  comparisons A1–A30 accepted. The JVM bridge runs the real `UnscentedKalmanFilterPlugin`,
   `AutosensDataStoreObject`, `GlucoseStatusCalculatorAutoIsf`, the COB/autosens pipeline and
   `DetermineBasalAutoISF`. Reports: [`docs/reports/W1.md`](docs/reports/W1.md) and
   [`docs/acceptance/`](docs/acceptance/).
@@ -29,7 +29,8 @@ algorithm variants under identical scenarios.
   carbohydrate), A22 (the behavioural layer in an announced scenario with a snack), A23 (infusion
   site failure), A24 (compression lows), A25 (a pre-registered safety gate), A26 (a fidelity
   scorecard against TimSim's real ranges), A27 (the scorecard with the behaviour layer), A28 (a
-  22-day drift pilot with the sourced ISF amplitude).
+  22-day drift pilot with the sourced ISF amplitude), A29 (the scorecard with behaviour and
+  compression), A30 (a drift amplitude sweep).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 - What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented
