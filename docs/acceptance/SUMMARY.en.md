@@ -212,6 +212,15 @@ no published concentration-to-EGP parameters. Wiring any of this to close `hypo_
 fitting, not modelling, so the mechanism stays out and `hypo_reb` stays a reported gap with a
 known direction. Reports: `A32.md`.
 
+### A33 — ablation: template meals without M3
+
+A29 plus only the eating template, with M3 off. Scorecard **7 of 12** — the best so far
+(`tail` 4.86, `acf30` 0.854, `acf60` 0.522, `outcome` 30.22, `hypo_rec` 51.25, `compress` 4.09,
+`noise` 6.56). The three-meal schedule was itself a large part of the CV/tail gap, proven by the
+ablation rather than assumed. M3 does the opposite: adding it (A31) pushes `acf60` to 0.716,
+`diurnal` to 138.9 and `hypo_rec` down to 45.0, so it belongs in robustness runs, not in the
+fidelity baseline. `hypo_reb` 47.7 and `diurnal` 64.4 remain outside. Report: `A33.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
