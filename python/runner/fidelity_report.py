@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import multiprocessing as mp
 import sys
@@ -17,18 +18,27 @@ from bridge.client import Bridge, insulin_from_settings, load_prefs
 from cgm.compression import CompressionConfig
 from cgm.validate_sensors import load_trace
 from runner.behaviour import BehaviourConfig
+from runner.intake import INTAKE_SEED_SALT, intake_schedule
 from runner.closed_loop import (
     AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, meals_for_days,
     run_closed_loop,
 )
 from runner.fidelity import SIGNATURES, evaluate, from_loop, in_real_range, report, trace
 from runner.options import RESIDUALS
+from simcore.variability import si_day
 from simcore.params import load_subjects
 from simcore.population import compute_cf, compute_cr, compute_tdi
 
 MEALS = [(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)]
 SETTINGS = ROOT / "data/raw/settings.json"
 REAL_FILES = ("sibionics2.csv", "libre2.csv", "aidex.csv")
+
+
+def meal_plan_for(mode: str, days: int, seed: int, body_weight: float):
+    """One day's fixed three meals or the sourced seven-occasion template, repeated daily."""
+    if mode == "template":
+        return intake_schedule(days, seed ^ INTAKE_SEED_SALT, body_weight)
+    return meals_for_days(MEALS, days), []
 
 
 def compression_for(rate_per_30d: float):
@@ -56,15 +66,22 @@ def profile_for(subject) -> AlgorithmProfile:
 
 
 def run_subject(task):
-    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate = task
+    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate, meal_plan, variability = task
     profile = profile_for(subject)
+    seed = zlib.crc32(name.encode()) & 0xFFFF
+    meals, snacks = meal_plan_for(
+        meal_plan, days, seed, float(getattr(subject, "BW", 70.0))
+    )
     scenario = Scenario(
         duration_min=int(days) * 24 * 60,
-        meals=meals_for_days(MEALS, days),
+        meals=meals, snacks=snacks,
         behaviour=BehaviourConfig() if behaviour else None,
         compression=compression_for(compression_rate),
     )
-    seed = zlib.crc32(name.encode()) & 0xFFFF
+    if variability:
+        scenario = dataclasses.replace(
+            scenario, si_multipliers=si_day(seed).multipliers, dawn_egp=1.5,
+        )
     schedule = adaptive_profile_schedule(profile, days, isf_cv, cr_cv, seed)
     with Bridge() as bridge:
         init_bridge(bridge, subject, prefs(), insulin(), profile, scenario)
@@ -89,10 +106,13 @@ def model_traces(
     readings_limit: int | None = None,
     workers: int = 1,
     compression_rate: float = 0.0,
+    meal_plan: str = "fixed",
+    variability: bool = False,
     runner=None,
 ) -> tuple[list[dict], list[dict]]:
     tasks = [
-        (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate)
+        (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit,
+         compression_rate, meal_plan, variability)
         for name in sorted(subjects)[:count]
     ]
     run = runner or run_subject
@@ -139,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--readings-limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--compression-rate", type=float, default=0.0)
+    parser.add_argument("--meal-plan", choices=("fixed", "template"), default="fixed")
+    parser.add_argument("--variability", action="store_true")
     parser.add_argument("--title", default="Fidelity scorecard")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
@@ -152,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         readings_limit=args.readings_limit or None,
         workers=args.workers,
         compression_rate=args.compression_rate,
+        meal_plan=args.meal_plan, variability=args.variability,
     )
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
@@ -203,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         "days": args.days, "isf_cv": args.isf_cv, "cr_cv": args.cr_cv,
         "readings_limit": args.readings_limit or None, "workers": args.workers,
         "compression_rate": args.compression_rate,
+        "meal_plan": args.meal_plan, "variability": args.variability,
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0
