@@ -52,6 +52,21 @@ def safety_from_loop(loop) -> dict:
     return values.as_dict()
 
 
+def pack_traces(traces) -> dict:
+    """Flatten per-subject raw series into one ``subject:field`` array per key."""
+    packed = {}
+    for item in traces:
+        name = item.get("subject", "")
+        raw = item.get("raw", {})
+        for field in (
+            "time", "cgm", "glucose", "rescue", "meals", "snacks",
+            "dose_time", "dose_units",
+        ):
+            if field in raw:
+                packed[f"{name}:{field}"] = np.asarray(raw[field], dtype=float)
+    return packed
+
+
 def per_subject_stats(traces):
     """One row per subject, so signature deltas can be paired rather than compared as medians."""
     rows = []
@@ -118,6 +133,13 @@ def run_subject(task):
     cgm_item = from_loop(loop)
     cgm_item["subject"] = name
     cgm_item["safety"] = safety_from_loop(loop)
+    cgm_item["raw"] = {
+        "time": loop.time, "cgm": loop.cgm, "glucose": loop.glucose,
+        "rescue": loop.rescue_events,
+        "meals": scenario.meals, "snacks": scenario.snacks,
+        "dose_time": [time_min for time_min, _, _ in loop.dose_events],
+        "dose_units": [units for _, units, _ in loop.dose_events],
+    }
     return cgm_item, item
 
 
@@ -187,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--meal-plan", choices=("fixed", "template"), default="fixed")
     parser.add_argument("--variability", action="store_true")
     parser.add_argument("--title", default="Fidelity scorecard")
+    parser.add_argument("--dump-traces", default="")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
@@ -201,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         compression_rate=args.compression_rate,
         meal_plan=args.meal_plan, variability=args.variability,
     )
+    if args.dump_traces:
+        np.savez_compressed(args.dump_traces, **pack_traces(cgm))
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
     real = {name: evaluate(items) for name, items in real_traces(Path(args.real_dir)).items()}

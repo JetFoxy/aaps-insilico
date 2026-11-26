@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from runner.fidelity_report import (
-    compression_for, meal_plan_for, per_subject_stats, safety_from_loop,
+    compression_for, meal_plan_for, pack_traces, per_subject_stats, safety_from_loop,
 )
 
 
@@ -51,3 +51,20 @@ def test_safety_from_loop_reports_gate_metrics():
     assert row["tbr_70"] == 0.0
     assert row["minutes_below_54_per_day"] == 0.0
     assert row["longest_below_54_min"] == 0.0
+
+
+def test_pack_traces_names_each_field_by_subject():
+    import numpy as np
+
+    trace = {
+        "subject": "adult#001",
+        "raw": {
+            "time": [60.0, 120.0], "cgm": [100.0, 101.0], "glucose": [99.0, 100.0],
+            "rescue": [[60.0, 15.0]], "meals": [[420.0, 50.0]], "snacks": [],
+            "dose_time": [60.0], "dose_units": [0.1],
+        },
+    }
+    packed = pack_traces([trace])
+    assert packed["adult#001:time"].shape == (2,)
+    assert packed["adult#001:rescue"].shape == (1, 2)
+    np.testing.assert_allclose(packed["adult#001:dose_units"], [0.1])
