@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from runner.fidelity_report import compression_for, meal_plan_for
+from runner.fidelity_report import compression_for, meal_plan_for, per_subject_stats
 
 
 def test_compression_for_is_off_at_zero_and_carries_the_rate():
@@ -22,3 +22,16 @@ def test_meal_plan_for_fixed_and_template():
     template = meal_plan_for("template", days=2, seed=1, body_weight=70.0)
     assert template == meal_plan_for("template", days=2, seed=1, body_weight=70.0)
     assert template[0] and template[1]
+
+
+def test_per_subject_stats_keeps_the_subject_label_and_every_signature():
+    import numpy as np
+    from runner.fidelity import SIGNATURES, trace
+
+    t = np.arange(0, 22 * 24 * 3600, 300.0)
+    item = trace(t, np.full_like(t, 120.0))
+    item["subject"] = "adult#001"
+    rows = per_subject_stats([item])
+    assert rows[0]["subject"] == "adult#001"
+    assert rows[0]["cv"] == 0.0
+    assert set(rows[0]) == {"subject"} | {key for key, _ in SIGNATURES}

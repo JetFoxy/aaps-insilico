@@ -41,6 +41,17 @@ def meal_plan_for(mode: str, days: int, seed: int, body_weight: float):
     return meals_for_days(MEALS, days), []
 
 
+def per_subject_stats(traces):
+    """One row per subject, so signature deltas can be paired rather than compared as medians."""
+    rows = []
+    for item in traces:
+        values = evaluate([item])
+        row = {"subject": item.get("subject", "")}
+        row.update({key: float(value[0]) for key, value in values.items()})
+        rows.append(row)
+    return rows
+
+
 def compression_for(rate_per_30d: float):
     """Compression artefacts are opt-in; the rate is events per 30 days."""
     if rate_per_30d <= 0:
@@ -93,7 +104,9 @@ def run_subject(task):
     item = from_loop(loop, plasma=True)
     item.pop("insulin", None)
     item.pop("sens", None)
-    return from_loop(loop), item
+    cgm_item = from_loop(loop)
+    cgm_item["subject"] = name
+    return cgm_item, item
 
 
 def model_traces(
@@ -227,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
         "readings_limit": args.readings_limit or None, "workers": args.workers,
         "compression_rate": args.compression_rate,
         "meal_plan": args.meal_plan, "variability": args.variability,
+        "per_subject": per_subject_stats(cgm),
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0
