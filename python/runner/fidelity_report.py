@@ -1,4 +1,4 @@
-"""Fidelity scorecard: ten glucose signatures of the stand against TimSim's real ranges."""
+"""Fidelity scorecard: twelve signatures of the stand against TimSim's real ranges."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,10 @@ sys.path.insert(0, str(ROOT / "python"))
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from cgm.validate_sensors import load_trace
 from runner.behaviour import BehaviourConfig
-from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+from runner.closed_loop import (
+    AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, meals_for_days,
+    run_closed_loop,
+)
 from runner.fidelity import evaluate, from_loop, in_real_range, report, trace
 from runner.options import RESIDUALS
 from simcore.params import load_subjects
@@ -36,24 +39,38 @@ def profile_for(subject) -> AlgorithmProfile:
     )
 
 
-def model_traces(subjects: dict, count: int, behaviour: bool = False) -> tuple[list[dict], list[dict]]:
+def model_traces(
+    subjects: dict,
+    count: int,
+    behaviour: bool = False,
+    days: int = 1,
+    isf_cv: float = 0.058,
+    cr_cv: float = 0.0,
+    readings_limit: int | None = None,
+) -> tuple[list[dict], list[dict]]:
     cgm, plasma = [], []
     with Bridge() as bridge:
         for name in [key for key in sorted(subjects)][:count]:
             subject = subjects[name]
             profile = profile_for(subject)
             scenario = Scenario(
-                duration_min=24 * 60, meals=MEALS,
+                duration_min=int(days) * 24 * 60,
+                meals=meals_for_days(MEALS, days),
                 behaviour=BehaviourConfig() if behaviour else None,
             )
+            seed = zlib.crc32(name.encode()) & 0xFFFF
+            schedule = adaptive_profile_schedule(profile, days, isf_cv, cr_cv, seed)
             init_bridge(bridge, subject, PREFS, INSULIN, profile, scenario)
             loop = run_closed_loop(
                 subject, bridge, profile, scenario,
-                seed=zlib.crc32(name.encode()) & 0xFFFF,
-                residuals=RESIDUALS, noise_kind="residuals",
+                seed=seed, residuals=RESIDUALS, noise_kind="residuals",
+                profile_schedule=schedule or None, readings_limit=readings_limit,
             )
             cgm.append(from_loop(loop))
-            plasma.append(from_loop(loop, plasma=True))
+            item = from_loop(loop, plasma=True)
+            item.pop("insulin", None)
+            item.pop("sens", None)
+            plasma.append(item)
     return cgm, plasma
 
 
@@ -84,11 +101,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--subjects", type=int, default=30)
     parser.add_argument("--real-dir", default=str(Path.home() / "Downloads/ukf_datasets"))
     parser.add_argument("--behaviour", action="store_true")
+    parser.add_argument("--days", type=int, default=1)
+    parser.add_argument("--isf-cv", type=float, default=0.058)
+    parser.add_argument("--cr-cv", type=float, default=0.0)
+    parser.add_argument("--readings-limit", type=int, default=0)
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
 
-    cgm, plasma = model_traces(load_subjects(), args.subjects, args.behaviour)
+    cgm, plasma = model_traces(
+        load_subjects(), args.subjects, args.behaviour,
+        days=args.days, isf_cv=args.isf_cv, cr_cv=args.cr_cv,
+        readings_limit=args.readings_limit or None,
+    )
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
     real = {name: evaluate(items) for name, items in real_traces(Path(args.real_dir)).items()}
@@ -101,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "## 1. Постановка",
         "",
-        f"{args.subjects} субъектов, 24 ч FCL, CGM с residual-шумом; истинная плазменная глюкоза",
-        "и CGM сравниваются с десятью статистиками TimSim (MIT, `timsim/analysis/signatures.py`).",
+        f"{args.subjects} субъектов, {args.days} сут FCL, CGM с residual-шумом; истинная плазменная глюкоза",
+        "и CGM сравниваются с двенадцатью статистиками TimSim (MIT, `timsim/analysis/signatures.py`).",
         "Реальный конверт — 192 пользователя четырёх closed-loop систем; допуск ±10 % ширины",
         "диапазона. Реальные трейсы — Sibionics, Libre 2, AiDex из локального набора.",
         "",
@@ -120,7 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         "   это не доказательство валидности и не клинический вывод.",
         "2. Сравнение с реальными трейсами проверяет саму реализацию статистик: если реальный",
         "   трейс не попадает в конверт, проблема в реализации или в другом сенсоре/популяции.",
-        "3. `drift` и `insulin_cv` здесь не считаются: нужны многодневные прогоны и история доз.",
+        "3. `drift` и `insulin_cv` определены только при ≥21 сутках и наличии истории доз;",
+        "   `drift` — применённое расписание ISF, а не измерение человека.",
         "",
         "## 4. Ограничения",
         "",
@@ -135,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     Path(args.json).write_text(json.dumps({
         "model_cgm": model, "model_plasma": model_plasma, "real": real,
         "subjects": args.subjects, "behaviour": args.behaviour,
+        "days": args.days, "isf_cv": args.isf_cv, "cr_cv": args.cr_cv,
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0

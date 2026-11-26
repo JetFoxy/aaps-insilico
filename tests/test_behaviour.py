@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from runner.behaviour import BehaviourConfig, Person, weekly_factors
 from runner.closed_loop import (
-    AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, run_closed_loop,
+    AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, meals_for_days,
+    run_closed_loop,
 )
 from simcore.params import load_subject
 
@@ -142,3 +143,27 @@ def test_adaptive_profile_schedule_starts_after_a_week():
     assert len(schedule) == 2
     assert schedule[0][0] == 7 * 24 * 60.0
     assert schedule[0][1].sens > 0 and schedule[0][1].carb_ratio > 0
+
+
+def test_meals_repeat_on_each_multi_day_day():
+    meals = [(420.0, 50.0), (780.0, 45.0)]
+    expanded = meals_for_days(meals, days=3)
+    assert len(expanded) == 6
+    assert expanded[0] == (420.0, 50.0)
+    assert expanded[2] == (420.0 + 1440.0, 50.0)
+    assert expanded[-1] == (780.0 + 2 * 1440.0, 45.0)
+    assert meals_for_days(meals, days=1) == meals
+
+
+def test_readings_limit_caps_what_the_bridge_sees():
+    subject = load_subject("adult#001")
+    profile = AlgorithmProfile(
+        sens=50.0, carb_ratio=10.0, target_bg=110.0, current_basal=1.0, enable_auto_isf=False,
+    )
+    bridge = FakeBridge()
+    run_closed_loop(
+        subject, bridge, profile, Scenario(duration_min=30),
+        seed=1, noise_kind="none", readings_limit=2,
+    )
+    cycles = [item for item in bridge.requests if item["cmd"] == "cycle"]
+    assert [len(item["readings"]) for item in cycles] == [1, 2, 2, 2, 2, 2]

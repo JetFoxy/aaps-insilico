@@ -85,6 +85,15 @@ def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> floa
     return profile.smb_ratio_3min * cadence_min / 3.0
 
 
+def meals_for_days(meals: list[tuple[float, float]], days: int) -> list[tuple[float, float]]:
+    """Repeat a one-day meal plan on every day of a multi-day run."""
+    return [
+        (time_min + day * 1440.0, grams)
+        for day in range(max(1, int(days)))
+        for time_min, grams in meals
+    ]
+
+
 def adaptive_profile_schedule(
     profile: AlgorithmProfile,
     days: int,
@@ -150,6 +159,7 @@ def run_closed_loop(
     noise_sigma: float = 2.49,
     noise_rho: float = 0.8,
     profile_schedule: list[tuple[float, AlgorithmProfile]] | None = None,
+    readings_limit: int | None = None,
 ) -> LoopResult:
     """temp_mode="planned" runs 30-min temps and reports minutes remaining; "cycle" is the legacy
     one-temp-per-cycle approximation."""
@@ -355,7 +365,8 @@ def run_closed_loop(
         )
         meal_json = {"carbs": 0.0, "mealCOB": 0.0}
         cycle = bridge.request({
-            "cmd": "cycle", "now": now_ms, "readings": cgm_history,
+            "cmd": "cycle", "now": now_ms,
+            "readings": cgm_history[-readings_limit:] if readings_limit else cgm_history,
             "sourceSensor": "Libre2", "autosens": 1.0,
             "exerciseMode": False, "halfBasalExerciseTarget": 160,
             "isTempTarget": False, "treatments": treatments,
