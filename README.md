@@ -13,7 +13,7 @@ algorithm variants under identical scenarios.
 - Work order and acceptance criteria: [`docs/PLAN.md`](docs/PLAN.md), design and milestone
   decisions: [`docs/superpowers/specs/2026-11-10-insilico-stand-design.md`](docs/superpowers/specs/2026-11-10-insilico-stand-design.md).
 - Status: W1 accepted (bridge parity on recorded Nightscout data), milestones M0–M8 accepted,
-  comparisons A1–A5 accepted. The JVM bridge runs the real `UnscentedKalmanFilterPlugin`,
+  comparisons A1–A28 accepted. The JVM bridge runs the real `UnscentedKalmanFilterPlugin`,
   `AutosensDataStoreObject`, `GlucoseStatusCalculatorAutoIsf`, the COB/autosens pipeline and
   `DetermineBasalAutoISF`. Reports: [`docs/reports/W1.md`](docs/reports/W1.md) and
   [`docs/acceptance/`](docs/acceptance/).

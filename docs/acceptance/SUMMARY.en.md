@@ -1,7 +1,8 @@
 # Acceptance summary (English)
 
-The full reports are in Russian next to this file (`A1.md` … `A6.md`, `M0.md` … `M8.md`). This page is
-the English entry point: what was built, what was measured, and how to read the numbers.
+The full reports are in Russian next to this file (`A1.md` … `A28.md`, `M0.md` … `M8.md`,
+`W1.md` … `W4.md`). This page is the English entry point: what was built, what was measured, and
+how to read the numbers.
 
 **Nothing here is clinical evidence.** The cohort is a *derived* S2008/S2013 set on S2017 equations,
 not the proprietary S2017 population; absolute TIR/TBR values should not be compared with trials.
@@ -103,6 +104,76 @@ Exercise: ΔTIR −0.002 pp (p = 0.014–0.19), ΔTBR +0.0034, ΔSMB −4.3, Δd
 stable across seeds (spread ≤ 0.1 pp) and matches A2's 30-subject result to within 0.1 pp / 0.1 U;
 at n = 120 the FCL TIR loss becomes statistically significant.
 
+### A8–A23 — later comparisons (compact)
+
+| ID | Content | Result |
+|---|---|---|
+| A8 | Sensor models (Facchinetti 2014, Dexcom G6) vs real traces; meal-announcement errors | model σ 2.46/1.36 vs 2.8–4.4 in traces; AR(1) is a fallback only |
+| A9 | Cross-check against LT1 (UVA/Padova T1DMS): 50 g, no bolus, 8 h | order of magnitude agrees; our adult peaks earlier (120 vs 203 min) and clears the meal faster |
+| A10 | Direction check against simglucose level C (10 adults, 5 repeats) | direction agrees: TIR −0.4…−0.5 pp, TBR +0.4…+0.6 pp, ΔLBGI +0.16 vs our +0.15 |
+| A11 | Robustness to CGM noise shape (xDrip fixture vs `resid_ma` vs `resid_quad`) | direction unchanged; TIR/TBR stable, LBGI sensitive to the spectrum |
+| A12 | MetaboNet loader, Medtronic Enlite residuals | σ 1.40–1.74, PSD slope 2.6; models match by σ but are "bluer" |
+| A13 | First off / autoISF / DynISF comparison, 6 subjects × 24 h FCL | DynISF sits between off and autoISF by TIR; SMB −26 %, but TBR 5.3 % and LBGI 1.38 |
+| A14 | off / autoISF / DynISF, 30 subjects × 24 h FCL | DynISF vs off: TIR −2.3 pp, TBR +3.7 pp, LBGI +1.19; insulin-while-falling −8.8 pp vs autoISF |
+| A15 | DynISF on the 120-subject cohort (3 arms, 360 runs) | A14 holds: ΔTIR −2.4, ΔTBR +3.8, ΔLBGI +1.17, falling −8.7 pp; p<0.0001 |
+| A16 | DynISF with M3 variability and on the model CF profile | with variability TIR +1.0 pp; on the aggressive CF TIR +6.6, TBR −11.4, LBGI −2.95 |
+| A17 | DynISF under faults (bolus delay, CGM gap/bias, suspend), 10 subjects | braking stable, but TBR +2…+4 and LBGI +0.5…+0.84 — worse than autoISF |
+| A18 | DynISF on 120 subjects with M3 variability | vs off: TIR +0.9, TBR +1.4, LBGI +0.45; autoISF better on TBR/LBGI, DynISF still brakes (−8.0 pp) |
+| A19 | DynISF on the model CF profile, 120 subjects | DynISF dominates vs off: TIR +6.1, TBR −10.9, LBGI −2.95; vs autoISF +7.7/−12.6/−3.27 |
+| A20 | DynISF under faults, 30 subjects | A17 confirmed: TIR −1.0…−3.3, TBR +2.5…+4.5, LBGI +0.94…+1.19; TBR significant everywhere |
+| A21 | DynISF under faults with the behaviour layer | rescue carbohydrate lowers absolute TBR/LBGI; the DynISF braking and TBR/LBGI penalty remain |
+| A22 | Behaviour layer in the announced scenario | snack and announcement error do not change A2: TIR +3.0 pp, SMB −3.4 |
+| A23 | Infusion-site failure | TAR +5.8/+5.4 pp, TIR −3.3/−1.9; TBR/LBGI fall; the A20 TBR/LBGI direction holds |
+
+### A24 — compression lows
+
+False CGM dips change the CGM metrics more than the true ones: under heavy compression CGM TBR is
+14.2 % against a true 8.7 %. For DynISF the CGM and true-plasma LBGI disagree in **sign** even at
+baseline, so a CGM-only low metric cannot be the sole outcome. Report: `A24.md`.
+
+### A25 — pre-registered safety gate (30 subjects, three arms)
+
+Criteria were hashed before the run (`3d711469b31058c0`). Medians pass, individual tails do not:
+worst-subject time below 54 mg/dL is 605 / 580 / 875 min per day for off / autoISF / DynISF, with
+3 / 3 / 6 severe events (longest below 54 ≥ 120 min). Exposure is 30 subject-days, so even a pass
+would only bound rare events at ~36 per subject-year (rule of three). The gate is a screen, not a
+safety proof. Report: `A25.md`.
+
+### A26 — fidelity scorecard (TimSim's ten glucose signatures)
+
+The 24 h model is inside the real envelope on 2 of 9 defined signatures (`acf30`, `noise`). The gaps
+map to layers not yet enabled in that run (rescue carbohydrate, compression) and to the single-day
+window (`diurnal`, `outcome`). Real single traces score 1–5 of 10; the envelope is not a pass/fail
+test. Report: `A26.md`.
+
+### A27 — fidelity scorecard with the behaviour layer
+
+Adding rescue carbohydrate moves `hypo_rec` from 113.8 to 77.5 min (real 50–59) and leaves
+`hypo_reb` at 100 % (real 23–28); the distribution signatures do not move, and the scorecard stays
+2/9. The layer is necessary but not sufficient. Report: `A27.md`.
+
+### A28 — 22-day run with ISF drift
+
+30 subjects, 22 days (three complete weeks; `insulin_cv` needs 22 days because the rolling 24 h
+window consumes one), two arms: no drift and a 15 % weekly ISF drift — the midpoint of the measured
+8–22 % real weekly drift (TimSim). The older 5.8 % figure was TimSim's controller-derived drift
+reading with the mechanism **off**, not a person measurement, and is not used.
+
+| Signature | No drift | Drift 15 % | Real range |
+|---|---|---|---|
+| `cv` / `tail` | 39.65 / 8.11 | 40.25 / 7.87 | outside |
+| `acf30` / `acf60` | 0.857 / 0.519 | 0.860 / 0.520 | inside |
+| `outcome` | 44.61 | 44.97 | defined, outside |
+| `hypo_rec` / `hypo_reb` | 102.5 / 68.0 | 100.0 / 67.3 | outside |
+| `noise` | 6.45 | 6.42 | inside |
+| `drift` | 0.00 | 6.63 [4.78–10.48] | below |
+| `insulin_cv` | 0.20 | 1.42 [1.16–3.36] | below |
+
+Scorecard: 3 of 12 in both arms. The drift is visible in insulin (7×) and not in glucose: the loop
+absorbs it with dose, as theory predicts. `drift` and `insulin_cv` estimate the imposed knob over
+three weekly points, so their comparison with the real envelope is a lower bound, not a model
+verdict; TimSim also notes that `insulin_cv` is driver-specific. Report: `A28.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
@@ -127,4 +198,4 @@ Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
 
 - Seeds: cohort perturbation (`--cohort-seed`), CGM noise (`crc32(subject)`), bootstrap (fixed).
 - Every comparison uses paired runs with identical CGM seeds.
-- 154 tests; `pytest tests/ -q`.
+- 198 tests; `pytest tests/ -q` (5 bridge tests are deselected by default; run them with `-m bridge`).
