@@ -255,6 +255,19 @@ Medians pass (TIR 0.712 vs 0.797). The template roughly halves the tail burden (
 147.3 → 30.5 min/day) but does not make the arm safe. Exposure is now 22× A25; the fail is not a
 short-window artefact. Report: `A37.md`.
 
+### A38 — diagnostics and the profile-fallback correction
+
+Trace diagnostics of the template arm: `diurnal` is meal-driven (peaks at 14:00 in 10 subjects
+and 20:00 in 13; trough 04–06; cohort 114 → 178 mg/dL), not a missing circadian layer. Of 919
+rescues, 719 (78 %) follow a true low and only 200 a false CGM low, so compression is secondary.
+The main finding is a harness bug: 3 of 30 subjects have no feasible CR under S2008 or S2013 and
+silently received an adult fallback (CR 10.5, CF 50), which over-insulinised them and produced
+most of the A37 tail. Excluding them (n=27): template worst `<54` 27.3 min/day (pass), TBR 0.077
+(pass), longest 150 (fail), severe 2; fixed still fails three criteria; A25 severe events 3/3/6 →
+0/1/3 with the direction unchanged. The scorecard keeps the same seven signatures, but `hypo_rec`
+sits exactly at 50.0. `profile_for` now refuses the fallback; `--allow-profile-fallback` reproduces
+old runs. Report: `A38.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an

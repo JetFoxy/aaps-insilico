@@ -7,7 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from runner.fidelity_report import (
-    compression_for, meal_plan_for, pack_traces, per_subject_stats, safety_from_loop,
+    compression_for, eligible_names, meal_plan_for, pack_traces, per_subject_stats,
+    profile_for, safety_from_loop,
 )
 
 
@@ -68,3 +69,23 @@ def test_pack_traces_names_each_field_by_subject():
     assert packed["adult#001:time"].shape == (2,)
     assert packed["adult#001:rescue"].shape == (1, 2)
     np.testing.assert_allclose(packed["adult#001:dose_units"], [0.1])
+
+
+def test_profile_for_refuses_a_subject_without_a_feasible_cr():
+    import pytest
+    from simcore.params import load_subject
+
+    with pytest.raises(ValueError):
+        profile_for(load_subject("child#001"))
+
+
+def test_eligible_names_skip_infeasible_profiles_by_default():
+    from simcore.params import load_subjects
+
+    all_subjects = load_subjects()
+    subset = {name: all_subjects[name] for name in ("child#001", "adult#001")}
+    strict = eligible_names(subset)
+    assert "child#001" not in strict
+    assert "adult#001" in strict
+    allowed = eligible_names(subset, allow_fallback=True)
+    assert "child#001" in allowed

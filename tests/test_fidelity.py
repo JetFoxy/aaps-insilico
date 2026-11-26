@@ -119,8 +119,12 @@ def test_model_traces_keeps_order_across_workers():
     from runner.fidelity_report import model_traces
 
     subjects = {f"s{index}": f"s{index}" for index in range(4)}
-    plain = model_traces(subjects, 3, workers=1, runner=_fake_subject_runner)
-    parallel = model_traces(subjects, 3, workers=2, runner=_fake_subject_runner)
+    plain = model_traces(
+        subjects, 3, workers=1, allow_fallback=True, runner=_fake_subject_runner,
+    )
+    parallel = model_traces(
+        subjects, 3, workers=2, allow_fallback=True, runner=_fake_subject_runner,
+    )
     assert [item["name"] for item in plain[0]] == ["s0", "s1", "s2"]
     assert [item["name"] for item in parallel[0]] == ["s0", "s1", "s2"]
     assert [item["name"] for item in parallel[1]] == ["s0", "s1", "s2"]

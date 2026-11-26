@@ -93,18 +93,38 @@ def insulin() -> dict:
     return insulin_from_settings(SETTINGS, "Lyumjev 45m 8h 100 ед")
 
 
-def profile_for(subject) -> AlgorithmProfile:
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
+def profile_for(subject, allow_fallback: bool = False) -> AlgorithmProfile:
+    """The subject's profile; refuse the arbitrary adult fallback unless explicitly allowed.
+
+    Three of the 30 derived subjects have no feasible CR under either the S2008 or the S2013
+    definition. The old fallback (CR 10.5, CF 50) over-insulinised them and drove the safety
+    tail; a run must skip them rather than invent a profile.
+    """
+    cr = compute_cr(subject)
+    if cr is None:
+        if not allow_fallback:
+            raise ValueError(f"{subject.name}: no feasible CR under S2008/S2013")
+        cr = 10.5
+    tdi = compute_tdi(subject, cr)
+    if tdi is None:
+        if not allow_fallback:
+            raise ValueError(f"{subject.name}: no feasible TDI")
+        tdi = 40.0
     return AlgorithmProfile(
         sens=compute_cf(tdi) or 50.0, carb_ratio=cr, target_bg=110.0,
         current_basal=subject.basal_u_per_min * 60, enable_auto_isf=False,
     )
 
 
+def eligible_names(subjects: dict, allow_fallback: bool = False) -> list[str]:
+    if allow_fallback:
+        return sorted(subjects)
+    return [name for name in sorted(subjects) if compute_cr(subjects[name]) is not None]
+
+
 def run_subject(task):
-    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate, meal_plan, variability = task
-    profile = profile_for(subject)
+    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate, meal_plan, variability, allow_fallback = task
+    profile = profile_for(subject, allow_fallback)
     seed = zlib.crc32(name.encode()) & 0xFFFF
     meals, snacks = meal_plan_for(
         meal_plan, days, seed, float(getattr(subject, "BW", 70.0))
@@ -155,12 +175,14 @@ def model_traces(
     compression_rate: float = 0.0,
     meal_plan: str = "fixed",
     variability: bool = False,
+    allow_fallback: bool = False,
     runner=None,
 ) -> tuple[list[dict], list[dict]]:
+    names = eligible_names(subjects, allow_fallback)[:count]
     tasks = [
         (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit,
-         compression_rate, meal_plan, variability)
-        for name in sorted(subjects)[:count]
+         compression_rate, meal_plan, variability, allow_fallback)
+        for name in names
     ]
     run = runner or run_subject
     if workers > 1:
@@ -210,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--variability", action="store_true")
     parser.add_argument("--title", default="Fidelity scorecard")
     parser.add_argument("--dump-traces", default="")
+    parser.add_argument("--allow-profile-fallback", action="store_true")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
@@ -223,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         workers=args.workers,
         compression_rate=args.compression_rate,
         meal_plan=args.meal_plan, variability=args.variability,
+        allow_fallback=args.allow_profile_fallback,
     )
     if args.dump_traces:
         np.savez_compressed(args.dump_traces, **pack_traces(cgm))
@@ -277,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         "readings_limit": args.readings_limit or None, "workers": args.workers,
         "compression_rate": args.compression_rate,
         "meal_plan": args.meal_plan, "variability": args.variability,
+        "allow_profile_fallback": args.allow_profile_fallback,
         "per_subject": per_subject_stats(cgm),
         "safety": [
             {"subject": trace_item.get("subject", ""), **trace_item.get("safety", {})}
