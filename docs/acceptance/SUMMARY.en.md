@@ -194,6 +194,24 @@ not a model result. At a 22 % amplitude the median `drift` (10.05) is inside the
 so the envelope is reachable; `insulin_cv` stays driver-specific and below range. Glucose does not
 move (`cv` 40.0–40.6, `hypo_rec` 100–105). Report: `A30.md`.
 
+### A31 — template meals and M3 variability
+
+A29 plus TimSim's seven-occasion eating template (292,140 carbohydrate entries from 147 OpenAPS
+Data Commons users; 5.2 occasions/day) and M3 diurnal sensitivity. `cv` 33.67, `tail` 4.64 and
+`outcome` 28.49 move into range; `acf30` 0.914 and `acf60` 0.716 move above it, and `hypo_rec`
+falls to 45.0, below range. `hypo_reb` improves to 48.7 but stays out. Scorecard: still 5 of 12,
+with a different composition — the fixed three-meal schedule was itself part of the CV/tail gap.
+Report: `A31.md`.
+
+### A32 — counterregulation: source review (blocked)
+
+TimSim's `glucagon.py` exists but is refuted in its own source: its action contributes ~0.001
+mg/kg/min against a 0.42–0.84 production target, its dynamic arm has the ordering backwards, and
+the secretion parameters are unpublished (Dalla Man 2014; Pompa 2021). The catecholamine arm has
+no published concentration-to-EGP parameters. Wiring any of this to close `hypo_reb` would be
+fitting, not modelling, so the mechanism stays out and `hypo_reb` stays a reported gap with a
+known direction. Reports: `A32.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an

@@ -13,7 +13,7 @@ UVA/Padova-подобным виртуальным пациентом (урав�
 алгоритма при одинаковых сценариях.
 
 - Статус: W1 принят (паритет моста на записанных данных Nightscout), этапы M0–M8 приняты,
-  сравнения A1–A30 приняты. JVM-мост запускает реальные `UnscentedKalmanFilterPlugin`,
+  сравнения A1–A32 приняты. JVM-мост запускает реальные `UnscentedKalmanFilterPlugin`,
   `AutosensDataStoreObject`, `GlucoseStatusCalculatorAutoIsf`, конвейер COB/autosens и
   `DetermineBasalAutoISF`. Отчёты: [`docs/reports/W1.md`](docs/reports/W1.md) и
   [`docs/acceptance/`](docs/acceptance/).
@@ -32,7 +32,8 @@ UVA/Padova-подобным виртуальным пациентом (урав�
   A24 (compression lows), A25 (pre-registered safety gate), A26 (fidelity scorecard против
   реального конверта TimSim), A27 (scorecard с поведенческим слоем), A28 (22-дневный дрейф ISF
   с амплитудой из источника), A29 (scorecard с behaviour и compression), A30 (sweep амплитуды
-  дрейфа).
+  дрейфа), A31 (шаблонная еда и M3-вариативность), A32 (source review по контррегуляции —
+  blocked).
   Сводка на английском: [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md);
   на русском: [`docs/acceptance/SUMMARY.ru.md`](docs/acceptance/SUMMARY.ru.md).
 - What-if на своих данных Nightscout: W1 (импорт), W2 (паритет replay — red, с документированным
