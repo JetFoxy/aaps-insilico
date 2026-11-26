@@ -194,6 +194,7 @@ def main() -> int:
     payload = {
         "elapsed_s": round(time.time() - started, 1), "subjects": names,
         "compare": args.compare, "behaviour": args.behaviour, "report": report,
+        "rows": results,
     }
     out = ROOT / args.out
     out.parent.mkdir(exist_ok=True)

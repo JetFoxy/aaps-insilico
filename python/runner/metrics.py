@@ -25,6 +25,8 @@ class Metrics:
     tar_180: float
     tbr_70: float
     tbr_54: float
+    minutes_below_54_per_day: float
+    longest_below_54_min: float
     lbgi: float
     smb_count: int
     total_insulin: float
@@ -39,6 +41,8 @@ class Metrics:
             "tar_180": self.tar_180,
             "tbr_70": self.tbr_70,
             "tbr_54": self.tbr_54,
+            "minutes_below_54_per_day": self.minutes_below_54_per_day,
+            "longest_below_54_min": self.longest_below_54_min,
             "lbgi": self.lbgi,
             "smb_count": self.smb_count,
             "total_insulin": self.total_insulin,
@@ -61,6 +65,12 @@ def compute_metrics(
         if glucose[index] - glucose[index - 1] < 0:
             time_min = index * cadence_min
             falling += sum(units for t, units, _ in dose_events if abs(t - time_min) < cadence_min)
+    below_54 = glucose < 54.0
+    longest = 0
+    run = 0
+    for value in below_54:
+        run = run + 1 if value else 0
+        longest = max(longest, run)
     smb_count = sum(1 for _, _, kind in dose_events if kind == "bolus")
     return Metrics(
         n=int(glucose.size),
@@ -69,6 +79,8 @@ def compute_metrics(
         tar_180=float(above.mean()),
         tbr_70=float((glucose < 70.0).mean()),
         tbr_54=float((glucose < 54.0).mean()),
+        minutes_below_54_per_day=float((glucose < 54.0).mean() * 1440.0),
+        longest_below_54_min=float(longest * cadence_min),
         lbgi=lbgi(glucose),
         smb_count=smb_count,
         total_insulin=float(total),
