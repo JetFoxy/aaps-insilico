@@ -140,10 +140,17 @@ def insulin_from_events(dose_events, n_cycles: int, cadence_min: float = 5.0) ->
     series = np.zeros(max(0, int(n_cycles)), dtype=float)
     if cadence_min <= 0 or series.size == 0:
         return series
+    dropped = 0.0
     for time_min, units, _kind in dose_events:
         index = int(round(float(time_min) / cadence_min)) - 1
         if 0 <= index < series.size:
             series[index] += float(units)
+        else:
+            dropped += float(units)
+    if dropped > 1e-12:
+        raise ValueError(
+            f"{dropped:.3f} U of logged insulin falls outside the {series.size}-cycle series"
+        )
     return series
 
 

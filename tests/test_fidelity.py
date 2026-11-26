@@ -170,3 +170,8 @@ def test_parallel_workers_match_sequential_traces():
     parallel = model_traces(subjects, 2, days=1, workers=2)
     for left, right in zip(sequential[0] + sequential[1], parallel[0] + parallel[1]):
         np.testing.assert_array_equal(left["bg"], right["bg"])
+
+
+def test_insulin_from_events_rejects_a_dose_outside_the_series():
+    with pytest.raises(ValueError):
+        insulin_from_events([(15.0, 1.0, "basal")], n_cycles=2, cadence_min=5.0)
