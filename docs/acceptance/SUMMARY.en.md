@@ -246,6 +246,15 @@ The same estimator test at 35 days. `drift` rises from 6.63 to **10.96** (measur
 Every glucose signature is unchanged, so the remaining fidelity gaps are not a window artefact.
 Report: `A36.md`.
 
+### A37 — safety gate over 660 subject-days
+
+The A25 gate repeated on 30 subjects × 22 days (660 subject-days per arm) with true plasma
+glucose, fixed vs template meals. Both arms fail the tails: worst time below 54 is 400.7 vs
+272.0 min/day, longest low 220 vs 175 min, worst TBR 0.360 vs 0.276, severe events 7 vs 4.
+Medians pass (TIR 0.712 vs 0.797). The template roughly halves the tail burden (P90 below 54:
+147.3 → 30.5 min/day) but does not make the arm safe. Exposure is now 22× A25; the fail is not a
+short-window artefact. Report: `A37.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
