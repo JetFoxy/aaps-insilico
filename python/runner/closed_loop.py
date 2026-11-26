@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from cgm.compression import CompressionArtefacts, CompressionConfig
 from cgm.noise import AR1Noise, BlockNoise, WhiteNoise
 from runner.behaviour import BehaviourConfig, Person, weekly_factors
 from runner.site import SiteFailure
@@ -56,6 +57,7 @@ class Scenario:
     dawn_egp: float = 0.0
     behaviour: BehaviourConfig | None = None
     site_failure: SiteFailure | None = None
+    compression: CompressionConfig | None = None
 
 
 @dataclass
@@ -168,6 +170,11 @@ def run_closed_loop(
         raise ValueError(f"unknown noise kind {noise_kind!r}")
     cycles = int(scenario.duration_min // cadence_min)
     noise_values = noise.sample(cycles) if noise is not None else np.zeros(cycles)
+    compression = (
+        CompressionArtefacts(scenario.compression, seed + 17, cycles, cadence_min)
+        if scenario.compression is not None
+        else None
+    )
 
     state = subject.state0.copy()
     schedule = sorted(profile_schedule or [], key=lambda item: item[0])
@@ -306,6 +313,10 @@ def run_closed_loop(
                 bias = scenario.cgm_bias[2]
             measured = sensor.measure(g_sub, t1) if sensor is not None else g_sub + noise_values[cycle]
             value = float(np.clip(np.round(measured + bias), 39.0, 400.0))
+            if compression is not None:
+                value = float(np.clip(
+                    np.round(value + compression.offset(cycle, value)), 39.0, 400.0
+                ))
             cgm_history.append([EPOCH0_MS + int(t1 * 60_000), value])
 
         if person is not None and not suspended_now:

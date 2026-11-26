@@ -9,7 +9,10 @@ import numpy as np
 def lbgi(values: np.ndarray) -> float:
     """Kovatchev low blood glucose index: mean of 10*f(BG)^2 for f(BG) < 0."""
     bg = np.asarray(values, dtype=float)
-    f = 1.509 * (np.log(bg) ** 1.084 - 5.381)
+    valid = np.isfinite(bg) & (bg > 0)
+    if not valid.any():
+        return float("nan")
+    f = 1.509 * (np.log(bg[valid]) ** 1.084 - 5.381)
     low = np.where(f < 0, 10.0 * f ** 2, 0.0)
     return float(low.mean())
 

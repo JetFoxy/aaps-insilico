@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
+from cgm.compression import CompressionConfig
 from pump.pump import PumpConfig
 from runner.a2_matrix import paired_stats
 from runner.behaviour import BehaviourConfig
@@ -43,6 +44,20 @@ FAULTS: dict[str, dict] = {
         "pump": None,
     },
     "suspend-60": {"scenario": Scenario(duration_min=24 * 60, meals=MEALS, suspend=(450.0, 60.0)), "pump": None},
+    "compression-stress": {
+        "scenario": Scenario(
+            duration_min=24 * 60, meals=MEALS,
+            compression=CompressionConfig(rate_per_30d=30.0),
+        ),
+        "pump": None,
+    },
+    "compression-heavy": {
+        "scenario": Scenario(
+            duration_min=24 * 60, meals=MEALS,
+            compression=CompressionConfig(rate_per_30d=300.0),
+        ),
+        "pump": None,
+    },
     "site-failure-6h": {
         "scenario": Scenario(
             duration_min=24 * 60, meals=MEALS,
@@ -83,6 +98,9 @@ def run_task(task: dict) -> dict:
             pump_config=spec["pump"], **task["noise"],
         )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
+    true_metrics = compute_metrics(np.array(loop.glucose), loop.dose_events).as_dict()
+    for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi"):
+        metrics[f"true_{key}"] = true_metrics[key]
     return {
         "subject": subject_name, "fault": fault, "auto_isf": auto_isf,
         "algorithm": algorithm, "metrics": metrics,
@@ -137,6 +155,10 @@ def main() -> int:
             key: float(np.mean([row[key] for row in rows])) for key in METRICS
         }
         report[fault]["n"] = len(rows)
+        for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi"):
+            report[fault][f"true_{key}"] = float(
+                np.mean([by_key[(name, fault, False, "autoisf")][f"true_{key}"] for name in names])
+            )
         if args.behaviour:
             report[fault]["rescue_events_mean"] = float(
                 np.mean([behaviour_by_key[(name, fault, False, "autoisf")]["rescue_events"] for name in names])
@@ -144,9 +166,12 @@ def main() -> int:
             report[fault]["rescue_grams_mean"] = float(
                 np.mean([behaviour_by_key[(name, fault, False, "autoisf")]["rescue_grams"] for name in names])
             )
-        report[fault]["delta_tir_vs_baseline"] = float(
-            np.mean([by_key[(name, fault, False, "autoisf")]["tir_70_180"] - by_key[(name, "baseline", False, "autoisf")]["tir_70_180"] for name in names])
-        )
+        if "baseline" in faults:
+            report[fault]["delta_tir_vs_baseline"] = float(
+                np.mean([by_key[(name, fault, False, "autoisf")]["tir_70_180"] - by_key[(name, "baseline", False, "autoisf")]["tir_70_180"] for name in names])
+            )
+        else:
+            report[fault]["delta_tir_vs_baseline"] = 0.0
         if args.compare:
             paired = [
                 {"off": by_key[(name, fault, False, "autoisf")], "on": by_key[(name, fault, True, "autoisf")]}
@@ -154,7 +179,7 @@ def main() -> int:
             ]
             report[fault]["auto_isf"] = {
                 key: paired_stats(paired, key)
-                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
+                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction", "true_tir_70_180", "true_tar_180", "true_tbr_70", "true_lbgi")
             }
         if args.dynisf:
             paired = [
@@ -163,7 +188,7 @@ def main() -> int:
             ]
             report[fault]["dynisf"] = {
                 key: paired_stats(paired, key)
-                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
+                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction", "true_tir_70_180", "true_tar_180", "true_tbr_70", "true_lbgi")
             }
 
     payload = {
