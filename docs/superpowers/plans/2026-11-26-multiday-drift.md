@@ -39,15 +39,15 @@ Steps:
 
 ## Task 2 — multi-day runner
 
-Files: `python/runner/fidelity_report.py`, `python/runner/closed_loop.py`, `tests/test_fidelity_report.py`
+Files: `python/runner/fidelity_report.py`, `python/runner/closed_loop.py`, `tests/test_behaviour.py`
 
 Steps:
 
-1. RED: tests for `_meals_for_days` (meal times repeated per day, count = days × meals) and
+1. RED: tests for `meals_for_days` (meal times repeated per day, count = days × meals) and
    for `run_closed_loop(..., readings_limit=N)` passing at most N readings to the bridge
    (assert on a fake bridge's received payload).
    Expected: failures for missing helpers.
-2. GREEN: add `_meals_for_days`, `--days`, `--isf-cv`/`--cr-cv`, `--readings-limit`; build the
+2. GREEN: add `meals_for_days`, `--days`, `--isf-cv`/`--cr-cv`, `--readings-limit`, `--workers`; build the
    scenario for `days × 1440` minutes; call `adaptive_profile_schedule` for runs ≥ 7 days and
    pass it to the loop; carry `loop.dose_events`/`variable_sens` into the trace; cap the
    bridge readings list when asked.
@@ -58,15 +58,19 @@ Steps:
 
 Steps:
 
-1. Smoke: one subject × 21 days, print per-signature values and wall time.
-2. Pilot: 30 subjects × 21 days with `isf_cv=0.058`, exit-code checked; JSON in `out/`.
+1. Smoke: one subject × 22 days, print per-signature values and wall time.
+2. Pilots: 30 subjects × 22 days, `isf_cv=0` and `isf_cv=0.15` (TimSim's measured 8-22 % weekly
+   ISF drift, mid-range), exit-code checked; JSON in `out/`. 22 days is the first run with three
+   complete weeks after the rolling 24 h window.
 3. Write `docs/acceptance/A28.md`: 12-signature table (model vs real envelope), which signatures
-   became defined, drift absorbed in glucose but visible in insulin, limitations.
-4. Update design table + README; commit `feat(fidelity): 21-day drift pilot; A28`.
+   became defined, what is the imposed knob and what is the model, limitations.
+4. Update design table + README; commit `feat(fidelity): multi-day drift pilot; A28`.
 
 ## Review Focus
 
 - The readings cap must not change ≤48 h runs (default uncapped).
 - `drift` is the applied ISF schedule, not a measurement of the person.
-- 21 days is the minimum for `insulin_weekly_cv` (needs ≥3 weekly points after a 14-day warm-up);
-  the report must not present a shorter run as a pass.
+- `insulin_weekly_cv` needs three complete weeks: 21 days for `weekly_sens_cv`, 22 days for
+  `insulin_weekly_cv` (the rolling window consumes one day); a shorter run must be `n/a`.
+- `isf_cv=0.15` must be presented as the imposed amplitude taken from the measured 8-22 % range,
+  not as a model shortfall; the measured `drift` is an estimator of that knob.
