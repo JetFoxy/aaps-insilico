@@ -21,6 +21,7 @@ from pump.pump import PumpConfig
 from runner.a2_matrix import paired_stats
 from runner.behaviour import BehaviourConfig
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+from runner.site import SiteFailure
 from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
 from simcore.population import compute_cf, compute_cr, compute_tdi
@@ -28,7 +29,7 @@ from simcore.population import compute_cf, compute_cr, compute_tdi
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
 MEALS = [(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)]
-METRICS = ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin")
+METRICS = ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin")
 
 FAULTS: dict[str, dict] = {
     "baseline": {"scenario": Scenario(duration_min=24 * 60, meals=MEALS), "pump": None},
@@ -42,6 +43,13 @@ FAULTS: dict[str, dict] = {
         "pump": None,
     },
     "suspend-60": {"scenario": Scenario(duration_min=24 * 60, meals=MEALS, suspend=(450.0, 60.0)), "pump": None},
+    "site-failure-6h": {
+        "scenario": Scenario(
+            duration_min=24 * 60, meals=MEALS,
+            site_failure=SiteFailure(start_min=8 * 60, duration_min=6 * 60, residual=0.40),
+        ),
+        "pump": None,
+    },
 }
 
 
@@ -92,12 +100,17 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--compare", action="store_true", help="run autoISF off/on and report paired deltas")
     ap.add_argument("--dynisf", action="store_true", help="also run the DynISF arm and report off vs dynisf")
+    ap.add_argument("--faults", default="", help="comma-separated fault names (default: all)")
     ap.add_argument("--out", default="out/fault_matrix.json")
     add_options(ap)
     args = ap.parse_args()
 
     cohort = load_cohort(args.cohort_copies, args.cohort_seed)
     names = [name for name, _ in sorted(cohort.items())][: args.subjects]
+    faults = [name for name in args.faults.split(",") if name] or list(FAULTS)
+    unknown = [name for name in faults if name not in FAULTS]
+    if unknown:
+        raise SystemExit(f"unknown faults: {', '.join(unknown)}")
     prefs = apply_prefs(PREFS, args.pref)
     noise = noise_kwargs(args)
     arms = [(False, "autoisf")]
@@ -109,7 +122,7 @@ def main() -> int:
         {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "algorithm": algorithm,
          "prefs": prefs, "noise": noise, "residuals_path": args.noise_file,
          "behaviour": args.behaviour}
-        for fault in FAULTS for name in names for auto_isf, algorithm in arms
+        for fault in faults for name in names for auto_isf, algorithm in arms
     ]
     started = time.time()
     with mp.Pool(processes=args.workers) as pool:
@@ -118,7 +131,7 @@ def main() -> int:
     by_key = {(row["subject"], row["fault"], row["auto_isf"], row.get("algorithm", "autoisf")): row["metrics"] for row in results}
     behaviour_by_key = {(row["subject"], row["fault"], row["auto_isf"], row.get("algorithm", "autoisf")): row["behaviour"] for row in results}
     report = {}
-    for fault in FAULTS:
+    for fault in faults:
         rows = [by_key[(name, fault, False, "autoisf")] for name in names]
         report[fault] = {
             key: float(np.mean([row[key] for row in rows])) for key in METRICS
@@ -141,7 +154,7 @@ def main() -> int:
             ]
             report[fault]["auto_isf"] = {
                 key: paired_stats(paired, key)
-                for key in ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
+                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
             }
         if args.dynisf:
             paired = [
@@ -150,7 +163,7 @@ def main() -> int:
             ]
             report[fault]["dynisf"] = {
                 key: paired_stats(paired, key)
-                for key in ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
+                for key in ("tir_70_180", "tar_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
             }
 
     payload = {
@@ -161,11 +174,12 @@ def main() -> int:
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    print(f"{'fault':22s} {'TIR':>6s} {'dTIR':>7s} {'TBR':>6s} {'LBGI':>6s} {'SMB':>5s} {'dose':>6s}")
+    print(f"{'fault':22s} {'TIR':>6s} {'dTIR':>7s} {'TAR':>6s} {'TBR':>6s} {'LBGI':>6s} {'SMB':>5s} {'dose':>6s}")
     for fault, stats in report.items():
         print(
             f"{fault:22s} {stats['tir_70_180']:6.3f} {stats['delta_tir_vs_baseline']:+7.3f} "
-            f"{stats['tbr_70']:6.3f} {stats['lbgi']:6.2f} {stats['smb_count']:5.0f} {stats['total_insulin']:6.1f}"
+            f"{stats['tar_180']:6.3f} {stats['tbr_70']:6.3f} {stats['lbgi']:6.2f} "
+            f"{stats['smb_count']:5.0f} {stats['total_insulin']:6.1f}"
         )
     if args.dynisf:
         print("\n== DynISF vs off under each fault (paired)")

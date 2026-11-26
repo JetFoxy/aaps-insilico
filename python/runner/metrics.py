@@ -19,6 +19,7 @@ class Metrics:
     n: int
     mean_glucose: float
     tir_70_180: float
+    tar_180: float
     tbr_70: float
     tbr_54: float
     lbgi: float
@@ -32,6 +33,7 @@ class Metrics:
             "n": self.n,
             "mean_glucose": self.mean_glucose,
             "tir_70_180": self.tir_70_180,
+            "tar_180": self.tar_180,
             "tbr_70": self.tbr_70,
             "tbr_54": self.tbr_54,
             "lbgi": self.lbgi,
@@ -49,6 +51,7 @@ def compute_metrics(
 ) -> Metrics:
     glucose = np.asarray(glucose, dtype=float)
     in_range = (glucose >= 70.0) & (glucose <= 180.0)
+    above = glucose > 180.0
     total = sum(units for _, units, _ in dose_events)
     falling = 0.0
     for index in range(1, glucose.size):
@@ -60,6 +63,7 @@ def compute_metrics(
         n=int(glucose.size),
         mean_glucose=float(glucose.mean()),
         tir_70_180=float(in_range.mean()),
+        tar_180=float(above.mean()),
         tbr_70=float((glucose < 70.0).mean()),
         tbr_54=float((glucose < 54.0).mean()),
         lbgi=lbgi(glucose),

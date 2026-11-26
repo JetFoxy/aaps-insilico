@@ -10,6 +10,7 @@ import numpy as np
 
 from cgm.noise import AR1Noise, BlockNoise, WhiteNoise
 from runner.behaviour import BehaviourConfig, Person, weekly_factors
+from runner.site import SiteFailure
 from cgm.sensors import make_sensor
 from exercise.model import ExerciseSession
 from pump.pump import Pump, PumpConfig
@@ -54,6 +55,7 @@ class Scenario:
     si_multipliers: tuple[float, float, float] | None = None
     dawn_egp: float = 0.0
     behaviour: BehaviourConfig | None = None
+    site_failure: SiteFailure | None = None
 
 
 @dataclass
@@ -230,6 +232,9 @@ def run_closed_loop(
         else:
             segment_rate = 0.0 if suspended_now else basal_u_per_h
 
+        site_fraction = (
+            scenario.site_failure.fraction(t0) if scenario.site_failure is not None else 1.0
+        )
         meals = [
             Meal(time=0.0, grams=grams, eat_rate_g_per_min=grams / cadence_min)
             for time_min, grams in scenario.meals + scenario.snacks
@@ -264,10 +269,10 @@ def run_closed_loop(
             if not t0 <= time_min < t1:
                 continue
             boluses.append(Bolus(
-                time=max(0.0, time_min - t0), units=units,
+                time=max(0.0, time_min - t0), units=units * site_fraction,
                 duration=pump.config.bolus_duration_min,
             ))
-            result.bolus_units_to_model += units
+            result.bolus_units_to_model += units * site_fraction
             result.dose_events.append((t1, units, "manual"))
             applied_boluses.append({
                 "kind": "bolus", "ts": EPOCH0_MS + int(round(time_min * 60_000)),
@@ -277,15 +282,16 @@ def run_closed_loop(
         for deliver_at, units in pending_boluses:
             if deliver_at < t1:
                 boluses.append(Bolus(
-                    time=max(0.0, deliver_at - t0), units=units,
+                    time=max(0.0, deliver_at - t0), units=units * site_fraction,
                     duration=pump.config.bolus_duration_min,
                 ))
-                result.bolus_units_to_model += units
+                result.bolus_units_to_model += units * site_fraction
             else:
                 still_pending.append((deliver_at, units))
         pending_boluses = still_pending
         segment = simulate(
-            subject, Schedule(segment_rate / 60.0, meals, boluses), cadence_min, 0.5,
+            subject, Schedule(segment_rate * site_fraction / 60.0, meals, boluses),
+            cadence_min, 0.5,
             time_varying=time_varying, x0=state,
         )
         state = segment.x[:, -1]
