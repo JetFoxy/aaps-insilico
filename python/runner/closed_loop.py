@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from cgm.noise import AR1Noise, BlockNoise, WhiteNoise
+from runner.behaviour import BehaviourConfig, Person
 from cgm.sensors import make_sensor
 from exercise.model import ExerciseSession
 from pump.pump import Pump, PumpConfig
@@ -50,6 +51,7 @@ class Scenario:
     announce_lead_min: float = 0.0
     si_multipliers: tuple[float, float, float] | None = None
     dawn_egp: float = 0.0
+    behaviour: BehaviourConfig | None = None
 
 
 @dataclass
@@ -66,6 +68,10 @@ class LoopResult:
     reason: list[str] = field(default_factory=list)
     bolus_units_to_model: float = 0.0
     dose_events: list[tuple[float, float, str]] = field(default_factory=list)
+    rescue_events: list[tuple[float, float]] = field(default_factory=list)
+    rescue_grams: float = 0.0
+    announced_meals: int = 0
+    unannounced_meals: int = 0
 
 
 def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> float:
@@ -75,7 +81,7 @@ def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> floa
 
 def init_bridge(bridge, subject: Subject, prefs: dict, insulin: dict, profile: AlgorithmProfile, scenario: Scenario) -> None:
     treatments: list[dict] = []
-    if scenario.meal_mode == "announced":
+    if scenario.meal_mode == "announced" and scenario.behaviour is None:
         for time_min, grams in scenario.meals:
             announced_min = time_min + scenario.announce_time_error_min - scenario.announce_lead_min
             announced_grams = grams * (1.0 + scenario.announce_amount_error_frac)
@@ -144,6 +150,28 @@ def run_closed_loop(
     applied_boluses: list[dict] = []
     pending_boluses: list[tuple[float, float]] = []
     result = LoopResult()
+    person = (
+        Person(scenario.behaviour, np.random.default_rng(seed))
+        if scenario.behaviour is not None
+        else None
+    )
+    announced_carbs: list[dict] = []
+    if person is not None and scenario.meal_mode == "announced":
+        announced_carbs = [
+            {
+                "kind": "carbs",
+                "ts": EPOCH0_MS + int(max(0.0, time_min) * 60_000),
+                "amount": grams,
+                "duration": 0,
+            }
+            for time_min, grams in (
+                (time_min, person.announce(grams)) for time_min, grams in scenario.meals
+            )
+            if grams > 0
+        ]
+    result.announced_meals = person.announced_meals if person is not None else 0
+    result.unannounced_meals = person.unannounced_meals if person is not None else 0
+    rescue_schedule: list[tuple[float, float]] = []
 
     planned_temps = temp_mode == "planned"
     temp_rate: float | None = None
@@ -180,6 +208,17 @@ def run_closed_loop(
             for time_min, grams in scenario.meals
             if time_min <= t0 < time_min + cadence_min
         ]
+        pending_rescue: list[tuple[float, float]] = []
+        for rescue_time, rescue_grams in rescue_schedule:
+            if rescue_time < t1:
+                meals.append(Meal(
+                    time=max(0.0, rescue_time - t0),
+                    grams=rescue_grams,
+                    eat_rate_g_per_min=rescue_grams / cadence_min,
+                ))
+            else:
+                pending_rescue.append((rescue_time, rescue_grams))
+        rescue_schedule = pending_rescue
         exercise = None
         if scenario.exercise is not None:
             exercise = ExerciseSession(
@@ -236,6 +275,16 @@ def run_closed_loop(
             value = float(np.clip(np.round(measured + bias), 39.0, 400.0))
             cgm_history.append([EPOCH0_MS + int(t1 * 60_000), value])
 
+        if person is not None and not suspended_now:
+            rescue_grams = person.rescue(value, t0)
+            if rescue_grams > 0:
+                delay = person.rescue_delay()
+                rescue_schedule.append(
+                    (t0 + delay, rescue_grams * person.config.rescue_bioavailability)
+                )
+                result.rescue_events.append((t0, rescue_grams))
+                result.rescue_grams += rescue_grams
+
         now_ms = EPOCH0_MS + int(t1 * 60_000)
 
         rate_now = basal_u_per_h
@@ -256,7 +305,7 @@ def run_closed_loop(
         else:
             current_temp = {"duration": int(cadence_min), "rate": basal_u_per_h, "minutesrunning": 0}
 
-        treatments = applied_temps + applied_boluses
+        treatments = applied_temps + applied_boluses + announced_carbs
         algorithm = "dynisf" if active_profile.algorithm == "dynisf" else (
             "autoisf" if active_profile.enable_auto_isf else None
         )

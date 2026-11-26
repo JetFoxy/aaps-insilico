@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import multiprocessing as mp
 import sys
@@ -18,6 +19,7 @@ sys.path.insert(0, str(ROOT / "python"))
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from pump.pump import PumpConfig
 from runner.a2_matrix import paired_stats
+from runner.behaviour import BehaviourConfig
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
@@ -60,19 +62,27 @@ def run_task(task: dict) -> dict:
     auto_isf = task["auto_isf"]
     algorithm = task.get("algorithm", "autoisf")
     spec = FAULTS[fault]
+    scenario = spec["scenario"]
+    if task.get("behaviour"):
+        scenario = dataclasses.replace(scenario, behaviour=BehaviourConfig())
     profile = profile_for(subject, auto_isf, algorithm)
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
     residuals = load_residuals(task.get("residuals_path"))
     with Bridge() as bridge:
-        init_bridge(bridge, subject, task["prefs"], INSULIN, profile, spec["scenario"])
+        init_bridge(bridge, subject, task["prefs"], INSULIN, profile, scenario)
         loop = run_closed_loop(
-            subject, bridge, profile, spec["scenario"], seed=seed, residuals=residuals,
+            subject, bridge, profile, scenario, seed=seed, residuals=residuals,
             pump_config=spec["pump"], **task["noise"],
         )
     metrics = compute_metrics(np.array(loop.cgm), loop.dose_events).as_dict()
     return {
         "subject": subject_name, "fault": fault, "auto_isf": auto_isf,
         "algorithm": algorithm, "metrics": metrics,
+        "behaviour": {
+            "rescue_events": len(loop.rescue_events),
+            "rescue_grams": loop.rescue_grams,
+            "unannounced_meals": loop.unannounced_meals,
+        },
     }
 
 
@@ -97,7 +107,8 @@ def main() -> int:
         arms.append((False, "dynisf"))
     tasks = [
         {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "algorithm": algorithm,
-         "prefs": prefs, "noise": noise, "residuals_path": args.noise_file}
+         "prefs": prefs, "noise": noise, "residuals_path": args.noise_file,
+         "behaviour": args.behaviour}
         for fault in FAULTS for name in names for auto_isf, algorithm in arms
     ]
     started = time.time()
@@ -105,6 +116,7 @@ def main() -> int:
         results = pool.map(run_task, tasks, chunksize=1)
 
     by_key = {(row["subject"], row["fault"], row["auto_isf"], row.get("algorithm", "autoisf")): row["metrics"] for row in results}
+    behaviour_by_key = {(row["subject"], row["fault"], row["auto_isf"], row.get("algorithm", "autoisf")): row["behaviour"] for row in results}
     report = {}
     for fault in FAULTS:
         rows = [by_key[(name, fault, False, "autoisf")] for name in names]
@@ -112,6 +124,13 @@ def main() -> int:
             key: float(np.mean([row[key] for row in rows])) for key in METRICS
         }
         report[fault]["n"] = len(rows)
+        if args.behaviour:
+            report[fault]["rescue_events_mean"] = float(
+                np.mean([behaviour_by_key[(name, fault, False, "autoisf")]["rescue_events"] for name in names])
+            )
+            report[fault]["rescue_grams_mean"] = float(
+                np.mean([behaviour_by_key[(name, fault, False, "autoisf")]["rescue_grams"] for name in names])
+            )
         report[fault]["delta_tir_vs_baseline"] = float(
             np.mean([by_key[(name, fault, False, "autoisf")]["tir_70_180"] - by_key[(name, "baseline", False, "autoisf")]["tir_70_180"] for name in names])
         )
@@ -136,7 +155,7 @@ def main() -> int:
 
     payload = {
         "elapsed_s": round(time.time() - started, 1), "subjects": names,
-        "compare": args.compare, "report": report,
+        "compare": args.compare, "behaviour": args.behaviour, "report": report,
     }
     out = ROOT / args.out
     out.parent.mkdir(exist_ok=True)

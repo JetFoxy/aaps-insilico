@@ -27,7 +27,8 @@ algorithm variants under identical scenarios.
   off/autoISF/DynISF matrix), A15 (DynISF on the 120-subject cohort), A16 (DynISF under M3
   variability and on the model CF profile), A17 (DynISF under faults), A18 (DynISF on the
   120-subject cohort with M3 variability), A19 (DynISF on the model CF profile, 120 subjects),
-  A20 (DynISF under faults, 30 subjects).
+  A20 (DynISF under faults, 30 subjects), A21 (the same with the behavioural layer / rescue
+  carbohydrate).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 - What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented
@@ -130,6 +131,7 @@ and `server/live.py`:
 | `--noise-scale` | amplitude multiplier (e.g. 1.5 for a noisier sensor) |
 | `--noise-sigma`, `--noise-ar1` | AR(1)/white parameters, mg/dL and lag-1 correlation |
 | `--pref KEY=VALUE` | override any AAPS preference (autoISF weights, SMB limits, ...) |
+| `--behaviour` | enable the behavioural layer (imperfect announcement + rescue carbs); used by `fault_matrix.py` |
 
 `facchinetti` and `dexcom` are the published sensor-error models (Facchinetti 2014; Vettoretti 2019
 Dexcom G6), implemented from the papers and cross-checked against LoopInsighT1 (MIT). Meal
@@ -145,6 +147,7 @@ The same values can come from the environment (CLI wins, then env, then built-in
 | `SIM_PREFS` | `key=value;key=value` overrides |
 | `SIM_PREFS_FILE` | path to a JSON object with overrides |
 | `SIM_ISF_SOURCE`, `SIM_TEMP_MODE`, `SIM_VARIABILITY`, `SIM_COMPARE` | run mode |
+| `SIM_BEHAVIOUR` | enable the behavioural layer (same as `--behaviour`) |
 | `SIM_HOST`, `SIM_PORT` | live server bind address |
 
 In the live UI the same parameters are editable per run: open **параметры прогона** above the

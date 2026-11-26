@@ -57,6 +57,8 @@ def add_options(parser: argparse.ArgumentParser) -> None:
                         help="lag-1 correlation for ar1 noise")
     parser.add_argument("--noise-file", default=env("SIM_NOISE_FILE"),
                         help="CSV/NPY with residuals to replay instead of the shipped fixture")
+    parser.add_argument("--behaviour", action="store_true", default=env_flag("SIM_BEHAVIOUR"),
+                        help="enable the behavioural layer (imperfect announcement + rescue carbs)")
     parser.add_argument("--pref", action="append", default=env_prefs(), metavar="KEY=VALUE",
                         help="override an AAPS preference for every run (repeatable; SIM_PREFS, SIM_PREFS_FILE)")
 
