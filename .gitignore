@@ -9,3 +9,6 @@ out/
 .ruff_cache/
 *.jar
 build/
+# internal process docs (specs/plans/work orders), not published
+/docs/superpowers/
+/docs/PLAN.md

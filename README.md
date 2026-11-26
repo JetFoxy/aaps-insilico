@@ -10,8 +10,6 @@ physical exercise.
 **Not** a clinical tool and not an FDA-adopted population. Output is a comparison of
 algorithm variants under identical scenarios.
 
-- Work order and acceptance criteria: [`docs/PLAN.md`](docs/PLAN.md), design and milestone
-  decisions: [`docs/superpowers/specs/2026-11-10-insilico-stand-design.md`](docs/superpowers/specs/2026-11-10-insilico-stand-design.md).
 - Status: W1 accepted (bridge parity on recorded Nightscout data), milestones M0–M8 accepted,
   comparisons A1–A28 accepted. The JVM bridge runs the real `UnscentedKalmanFilterPlugin`,
   `AutosensDataStoreObject`, `GlucoseStatusCalculatorAutoIsf`, the COB/autosens pipeline and
@@ -116,8 +114,7 @@ W2 is **red**: in-window coverage is 100% and the CGM input matches, but factor-
 recorded by a newer production AAPS with the raw-observation estimator and autoISF IOB/COB inputs.
 Absolute reproduction of AAPS decisions is not claimed.
 W3 is an illustration: the matched subject is far from the user (distance ~0.5) and the model line is
-labelled as such. Design: `docs/superpowers/specs/2026-11-23-whatif-nightscout-design.md`; plan:
-`docs/superpowers/plans/2026-11-23-whatif-nightscout.md`.
+labelled as such. Reports: `docs/acceptance/W1.md`–`W4.md`.
 
 ## Parameters
 
