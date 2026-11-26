@@ -1,6 +1,7 @@
 """Closed loop with meals, both meal modes, SMB, dose journal and simple failures."""
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -8,7 +9,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from cgm.noise import AR1Noise, BlockNoise, WhiteNoise
-from runner.behaviour import BehaviourConfig, Person
+from runner.behaviour import BehaviourConfig, Person, weekly_factors
 from cgm.sensors import make_sensor
 from exercise.model import ExerciseSession
 from pump.pump import Pump, PumpConfig
@@ -40,6 +41,7 @@ class Scenario:
     name: str = "basal"
     duration_min: int = 24 * 60
     meals: list[tuple[float, float]] = field(default_factory=list)  # (minute, grams)
+    snacks: list[tuple[float, float]] = field(default_factory=list)  # (minute, grams)
     boluses: list[tuple[float, float]] = field(default_factory=list)
     meal_mode: str = "fcl"  # "fcl" | "announced"
     exercise: ExerciseSession | None = None
@@ -77,6 +79,30 @@ class LoopResult:
 def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> float:
     """Scale the per-3-min SMB delivery ratio so insulin per minute stays constant."""
     return profile.smb_ratio_3min * cadence_min / 3.0
+
+
+def adaptive_profile_schedule(
+    profile: AlgorithmProfile,
+    days: int,
+    isf_cv: float = 0.058,
+    cr_cv: float = 0.0,
+    seed: int = 0,
+) -> list[tuple[float, AlgorithmProfile]]:
+    """Weekly ISF/CR drift for multi-day runs; empty for runs shorter than a week."""
+    weeks = max(0, int(days) // 7)
+    schedule: list[tuple[float, AlgorithmProfile]] = []
+    for index, (isf_factor, cr_factor) in enumerate(
+        weekly_factors(weeks, isf_cv, cr_cv, seed), start=1
+    ):
+        schedule.append((
+            index * 7 * 24 * 60.0,
+            dataclasses.replace(
+                profile,
+                sens=profile.sens * isf_factor,
+                carb_ratio=profile.carb_ratio * cr_factor,
+            ),
+        ))
+    return schedule
 
 
 def init_bridge(bridge, subject: Subject, prefs: dict, insulin: dict, profile: AlgorithmProfile, scenario: Scenario) -> None:
@@ -157,18 +183,19 @@ def run_closed_loop(
     )
     announced_carbs: list[dict] = []
     if person is not None and scenario.meal_mode == "announced":
-        announced_carbs = [
-            {
-                "kind": "carbs",
-                "ts": EPOCH0_MS + int(max(0.0, time_min) * 60_000),
-                "amount": grams,
-                "duration": 0,
-            }
-            for time_min, grams in (
-                (time_min, person.announce(grams)) for time_min, grams in scenario.meals
-            )
-            if grams > 0
-        ]
+        entries = (
+            [(time_min, grams, False) for time_min, grams in scenario.meals]
+            + [(time_min, grams, True) for time_min, grams in scenario.snacks]
+        )
+        for time_min, grams, is_snack in entries:
+            estimate = person.announce(grams, is_snack)
+            if estimate > 0:
+                announced_carbs.append({
+                    "kind": "carbs",
+                    "ts": EPOCH0_MS + int(max(0.0, time_min) * 60_000),
+                    "amount": estimate,
+                    "duration": 0,
+                })
     result.announced_meals = person.announced_meals if person is not None else 0
     result.unannounced_meals = person.unannounced_meals if person is not None else 0
     rescue_schedule: list[tuple[float, float]] = []
@@ -205,7 +232,7 @@ def run_closed_loop(
 
         meals = [
             Meal(time=0.0, grams=grams, eat_rate_g_per_min=grams / cadence_min)
-            for time_min, grams in scenario.meals
+            for time_min, grams in scenario.meals + scenario.snacks
             if time_min <= t0 < time_min + cadence_min
         ]
         pending_rescue: list[tuple[float, float]] = []

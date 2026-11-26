@@ -28,7 +28,7 @@ algorithm variants under identical scenarios.
   variability and on the model CF profile), A17 (DynISF under faults), A18 (DynISF on the
   120-subject cohort with M3 variability), A19 (DynISF on the model CF profile, 120 subjects),
   A20 (DynISF under faults, 30 subjects), A21 (the same with the behavioural layer / rescue
-  carbohydrate).
+  carbohydrate), A22 (the behavioural layer in an announced scenario with a snack).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 - What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented

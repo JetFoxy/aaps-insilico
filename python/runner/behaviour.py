@@ -20,6 +20,7 @@ class BehaviourConfig:
     """Probabilities and distributions for one person's behaviour."""
 
     p_announce_main: float = 0.80
+    p_announce_snack: float = 0.35
     carb_estimate_cv: float = 0.25
     carb_estimate_bias: float = 1.0
     rescue: bool = True
@@ -43,7 +44,7 @@ class Person:
         self.announced_meals = 0
         self.unannounced_meals = 0
 
-    def announce(self, grams: float) -> float:
+    def announce(self, grams: float, is_snack: bool = False) -> float:
         """What the algorithm is told about a meal of ``grams``; zero means unannounced."""
         if grams <= 0:
             return 0.0
@@ -54,7 +55,10 @@ class Person:
             * self.config.carb_estimate_bias
             * float(self.rng.lognormal(-0.5 * sigma ** 2, sigma))
         )
-        if u > self.config.p_announce_main:
+        probability = (
+            self.config.p_announce_snack if is_snack else self.config.p_announce_main
+        )
+        if u > probability:
             self.unannounced_meals += 1
             return 0.0
         self.announced_meals += 1
@@ -79,3 +83,27 @@ class Person:
     def rescue_delay(self) -> float:
         low, high = self.config.rescue_delay_min
         return float(self.rng.uniform(low, high))
+
+
+def weekly_factors(
+    weeks: int,
+    isf_cv: float = 0.058,
+    cr_cv: float = 0.0,
+    seed: int = 0,
+) -> list[tuple[float, float]]:
+    """Multiplicative weekly drift factors for the algorithm's ISF and carb ratio.
+
+    The 5.8 % ISF figure is the person's week-to-week variation measured by TimSim; CR drift
+    has no comparable measurement here, so its default is zero. The factors are centred on
+    one and deterministic for a seed.
+    """
+    rng = np.random.default_rng(seed)
+    out: list[tuple[float, float]] = []
+    for _ in range(max(0, weeks)):
+        sigma_isf = float(np.sqrt(np.log(1.0 + isf_cv ** 2)))
+        sigma_cr = float(np.sqrt(np.log(1.0 + cr_cv ** 2)))
+        out.append((
+            float(rng.lognormal(-0.5 * sigma_isf ** 2, sigma_isf)),
+            float(rng.lognormal(-0.5 * sigma_cr ** 2, sigma_cr)),
+        ))
+    return out

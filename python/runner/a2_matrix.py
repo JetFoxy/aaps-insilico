@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from exercise.model import ExerciseSession
+from runner.behaviour import BehaviourConfig
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
@@ -54,6 +55,14 @@ SCENARIOS = {
         scenario=Scenario(
             name="announced-8h", duration_min=8 * 60,
             meals=[(2 * 60, 50.0), (5 * 60, 50.0)], meal_mode="announced",
+        ),
+        profile_scale=1.0,
+    ),
+    "announced-snack": dict(
+        scenario=Scenario(
+            name="announced-snack", duration_min=8 * 60,
+            meals=[(2 * 60, 50.0), (5 * 60, 50.0)],
+            snacks=[(4 * 60, 20.0)], meal_mode="announced",
         ),
         profile_scale=1.0,
     ),
@@ -104,6 +113,8 @@ def run_task(task: dict) -> dict:
     isf_source = task["isf_source"]
     spec = SCENARIOS[scenario_name]
     scenario = spec["scenario"]
+    if task.get("behaviour"):
+        scenario = dataclasses.replace(scenario, behaviour=BehaviourConfig())
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
     if variability:
         scenario = dataclasses.replace(
@@ -126,6 +137,10 @@ def run_task(task: dict) -> dict:
     metrics["sens_ratio_min"] = float(np.min(sens) / profile.sens)
     metrics["sens_ratio_max"] = float(np.max(sens) / profile.sens)
     metrics["sens_changed_frac"] = float(np.mean(np.abs(sens - profile.sens) > 1e-6))
+    metrics["rescue_events"] = len(loop.rescue_events)
+    metrics["rescue_grams"] = loop.rescue_grams
+    metrics["announced_meals"] = loop.announced_meals
+    metrics["unannounced_meals"] = loop.unannounced_meals
     return {
         "subject": subject_name,
         "scenario": scenario_name,
@@ -199,7 +214,7 @@ def main() -> int:
             "subject": cohort[name], "scenario": scenario, "auto_isf": auto_isf,
             "temp_mode": args.temp_mode, "variability": args.variability,
             "isf_source": args.isf_source, "prefs": prefs, "noise": noise,
-            "residuals_path": args.noise_file,
+            "residuals_path": args.noise_file, "behaviour": args.behaviour,
         }
         for scenario in scenarios for name in names for auto_isf in (False, True)
     ]
@@ -237,6 +252,7 @@ def main() -> int:
         "variability": args.variability, "isf_source": args.isf_source,
         "cohort_copies": args.cohort_copies, "cohort_seed": args.cohort_seed,
         "noise": args.noise, "noise_scale": args.noise_scale, "prefs": args.pref,
+        "behaviour": args.behaviour,
         "subjects": names, "report": report,
     }
     out = ROOT / args.out

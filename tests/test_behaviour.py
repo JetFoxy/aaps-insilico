@@ -8,8 +8,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
-from runner.behaviour import BehaviourConfig, Person
-from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
+from runner.behaviour import BehaviourConfig, Person, weekly_factors
+from runner.closed_loop import (
+    AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, run_closed_loop,
+)
 from simcore.params import load_subject
 
 
@@ -113,3 +115,30 @@ def test_behaviour_loop_skips_init_carbs_and_logs_rescue():
     assert loop.rescue_events
     cycle = next(item for item in bridge.requests if item["cmd"] == "cycle")
     assert not any(item["kind"] == "carbs" for item in cycle["treatments"])
+
+
+def test_snack_probability_uses_the_snack_rate():
+    person = Person(
+        BehaviourConfig(p_announce_main=1.0, p_announce_snack=0.0),
+        np.random.default_rng(5),
+    )
+    assert person.announce(20.0, is_snack=True) == 0.0
+    assert person.announce(50.0, is_snack=False) > 0.0
+
+
+def test_weekly_factors_are_centred_and_deterministic():
+    a = weekly_factors(8, isf_cv=0.058, seed=11)
+    b = weekly_factors(8, isf_cv=0.058, seed=11)
+    assert a == b
+    assert len(a) == 8
+    assert all(isf > 0 and cr > 0 for isf, cr in a)
+    assert 0.8 < float(np.median([isf for isf, _ in a])) < 1.2
+
+
+def test_adaptive_profile_schedule_starts_after_a_week():
+    profile = AlgorithmProfile(sens=50.0, carb_ratio=10.0, target_bg=110.0, current_basal=1.0)
+    assert adaptive_profile_schedule(profile, days=1) == []
+    schedule = adaptive_profile_schedule(profile, days=14, seed=3)
+    assert len(schedule) == 2
+    assert schedule[0][0] == 7 * 24 * 60.0
+    assert schedule[0][1].sens > 0 and schedule[0][1].carb_ratio > 0
