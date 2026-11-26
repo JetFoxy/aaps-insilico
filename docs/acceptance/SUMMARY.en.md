@@ -231,6 +231,21 @@ the gain is concentrated in a subset. `acf60` rises consistently but stays in ra
 `noise`, `drift` and `insulin_cv` do not move. This confirms that the fixed three-meal schedule
 was a real part of the CV/tail gap, not a modelling excuse. Report: `A34.md`.
 
+### A35 — cohort resampling
+
+Bootstrapping the 30 subjects of A33 (4000 resamples) puts the scorecard at **7 of 12 with a
+90 % interval of [5, 9]**. Five signatures are robustly inside: `tail`, `acf30`, `acf60`,
+`compress`, `noise` (P ≥ 0.88). `hypo_rec` is fragile (P = 0.54), `outcome` middling (0.66), and
+`hypo_reb` is robustly outside (P = 0.002). A one- or two-signature difference between
+configurations is resampling noise; compare the composition, not the count. Report: `A35.md`.
+
+### A36 — 35 days: drift estimator convergence
+
+The same estimator test at 35 days. `drift` rises from 6.63 to **10.96** (measured/imposed 0.44
+→ 0.73) and enters the real 8.2–21.7 range; `insulin_cv` rises 1.42 → 2.72 but stays below.
+Every glucose signature is unchanged, so the remaining fidelity gaps are not a window artefact.
+Report: `A36.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
