@@ -31,7 +31,7 @@ algorithm variants under identical scenarios.
   carbohydrate), A22 (the behavioural layer in an announced scenario with a snack), A23 (infusion
   site failure), A24 (compression lows), A25 (a pre-registered safety gate), A26 (a fidelity
   scorecard against TimSim's real ranges), A27 (the scorecard with the behaviour layer), A28 (a
-  21-day drift pilot).
+  22-day drift pilot with the sourced ISF amplitude).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 - What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented

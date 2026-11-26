@@ -372,7 +372,7 @@ look-ahead исправлен; `COB > 0` вне области W1).
 | A25 ✅ | Pre-registered safety gate | Все плечи fail по индивидуальным хвостам (worst >60 мин/сут <54, >120 мин непрерывно, TBR >10 %); DynISF worst; gate — скрин, не доказательство — `docs/acceptance/A25.md` |
 | A26 ✅ | Fidelity scorecard (10 статистик TimSim) | Модель 2/9 в конверте; пробелы hypo_rec/reb, compression, diurnal/outcome; реальные трейсы 1–5/10; scorecard, не валидация — `docs/acceptance/A26.md` |
 | A27 ✅ | Fidelity scorecard с behaviour | Rescue улучшает hypo_rec 113.8→77.5, но не в конверт; hypo_reb 100 %; scorecard 2/9 — `docs/acceptance/A27.md` |
-| A28 ✅ | Многодневный прогон 21 сут с дрейфом ISF | Scorecard 3/12; acf60 и outcome определились; дрейф виден в insulin_cv (0.19→1.20), не в глюкозе; величины ниже конверта; чистый пин после инцидента со смешанной сборкой — `docs/acceptance/A28.md` |
+| A28 ✅ | Многодневный прогон 22 сут с дрейфом ISF (15 %, из измеренных 8–22 %) | Scorecard 3/12; acf60 и outcome определились; дрейф виден в insulin_cv (0.20→1.42), не в глюкозе; drift 6.63 — оценщик ручки на трёх неделях; чистый пин после инцидента со смешанной сборкой — `docs/acceptance/A28.md` |
 
 **Поправка 2026-11-11 (важно).** В контуре найден баг: SMB-болюсы попадали в журнал и в IOB,
 но не подавались в физиологическую модель. Исправлено (`Schedule.boluses` следующего сегмента,
