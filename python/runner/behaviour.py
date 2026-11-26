@@ -87,15 +87,17 @@ class Person:
 
 def weekly_factors(
     weeks: int,
-    isf_cv: float = 0.058,
+    isf_cv: float = 0.15,
     cr_cv: float = 0.0,
     seed: int = 0,
 ) -> list[tuple[float, float]]:
     """Multiplicative weekly drift factors for the algorithm's ISF and carb ratio.
 
-    The 5.8 % ISF figure is the person's week-to-week variation measured by TimSim; CR drift
-    has no comparable measurement here, so its default is zero. The factors are centred on
-    one and deterministic for a seed.
+    The default 15 % sits inside the measured 8-22 % CV of real weekly ISF drift (TimSim,
+    ``timsim/person/behaviour.py``: "Real weekly ISF drift is 8-22% CV, measured on the
+    cohort"). TimSim's 5.8 % figure is the controller-derived drift *reading*, not the
+    person, and is not used here. CR drift has no comparable measurement, so its default is
+    zero. The factors are centred on one and deterministic for a seed.
     """
     rng = np.random.default_rng(seed)
     out: list[tuple[float, float]] = []

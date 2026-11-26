@@ -78,6 +78,8 @@ class LoopResult:
     rescue_grams: float = 0.0
     announced_meals: int = 0
     unannounced_meals: int = 0
+    cadence_min: float = 5.0
+    applied_sens: list[float] = field(default_factory=list)
 
 
 def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> float:
@@ -97,7 +99,7 @@ def meals_for_days(meals: list[tuple[float, float]], days: int) -> list[tuple[fl
 def adaptive_profile_schedule(
     profile: AlgorithmProfile,
     days: int,
-    isf_cv: float = 0.058,
+    isf_cv: float = 0.15,
     cr_cv: float = 0.0,
     seed: int = 0,
 ) -> list[tuple[float, AlgorithmProfile]]:
@@ -194,7 +196,7 @@ def run_closed_loop(
     applied_temps: list[dict] = []
     applied_boluses: list[dict] = []
     pending_boluses: list[tuple[float, float]] = []
-    result = LoopResult()
+    result = LoopResult(cadence_min=float(cadence_min))
     person = (
         Person(scenario.behaviour, np.random.default_rng(seed))
         if scenario.behaviour is not None
@@ -343,6 +345,7 @@ def run_closed_loop(
 
         rate_now = basal_u_per_h
         insulin_req = 0.0
+        result.applied_sens.append(active_profile.sens)
         variable_sens = active_profile.sens
         iob_now = 0.0
         cob_now = 0.0

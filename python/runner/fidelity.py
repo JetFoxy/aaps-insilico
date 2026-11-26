@@ -43,10 +43,15 @@ def trace(t_seconds, bg, cadence: float = 300.0) -> dict:
 def from_loop(loop, plasma: bool = False, cadence: float = 300.0) -> dict:
     values = loop.glucose if plasma else loop.cgm
     item = trace(np.asarray(loop.time, dtype=float) * 60.0, values, cadence)
+    loop_cadence = float(getattr(loop, "cadence_min", cadence / 60.0))
+    item["series_cadence"] = loop_cadence * 60.0
     if getattr(loop, "dose_events", None):
-        item["insulin"] = insulin_from_events(loop.dose_events, len(values), cadence / 60.0)
-    if getattr(loop, "variable_sens", None):
-        item["sens"] = np.asarray(loop.variable_sens, dtype=float)
+        item["insulin"] = insulin_from_events(loop.dose_events, len(values), loop_cadence)
+    sens = getattr(loop, "applied_sens", None)
+    if sens is None or len(sens) == 0:
+        sens = getattr(loop, "variable_sens", None)
+    if sens is not None and len(sens):
+        item["sens"] = np.asarray(sens, dtype=float)
     return item
 
 
@@ -146,29 +151,33 @@ def insulin_weekly_cv(insulin_per_step, step_minutes: float = 5.0) -> float:
     """Week-to-week %CV of total daily insulin, on the pump's delivery log.
 
     The arithmetic is TimSim's: a rolling 24-hour total at one value per step, reduced to one
-    value per day by its median, averaged into weeks, and expressed as a CV across weeks.
-    It needs at least three weeks, so a shorter run returns NaN rather than a misleading number.
+    value per day by its median, averaged into complete weeks, and expressed as a CV across
+    weeks. Three complete weeks are required, so a shorter run returns NaN rather than a
+    misleading number. The rolling window consumes one day, so the first finite value is at
+    22 days; the trailing partial week is dropped.
     """
     values = np.asarray(insulin_per_step, dtype=float)
     if values.size < 2 or step_minutes <= 0:
         return float("nan")
     per_day = int(round(1440.0 / float(step_minutes)))
-    if per_day < 1 or values.size < 3 * per_day:
+    if per_day < 1:
         return float("nan")
     rolling = np.convolve(values, np.ones(per_day), mode="valid")
+    if rolling.size < 21 * per_day:
+        return float("nan")
     day_of = np.arange(rolling.size) // per_day
     daily = np.array([np.median(rolling[day_of == day]) for day in np.unique(day_of)])
-    if daily.size < 14:
+    weeks = daily.size // 7
+    if weeks < 3:
         return float("nan")
-    week_of = np.arange(daily.size) // 7
-    weekly = np.array([daily[week_of == week].mean() for week in np.unique(week_of)])
-    if weekly.size < 3 or weekly.mean() <= 0:
+    weekly = daily[:weeks * 7].reshape(weeks, 7).mean(axis=1)
+    if weekly.mean() <= 0:
         return float("nan")
     return float(100.0 * weekly.std() / weekly.mean())
 
 
 def weekly_sens_cv(sens_per_step, step_minutes: float = 5.0) -> float:
-    """Week-to-week %CV of the sensitivity the algorithm was given."""
+    """Week-to-week %CV of the sensitivity the algorithm was given, over complete weeks."""
     values = np.asarray(sens_per_step, dtype=float)
     if values.size < 2 or step_minutes <= 0:
         return float("nan")
@@ -179,11 +188,11 @@ def weekly_sens_cv(sens_per_step, step_minutes: float = 5.0) -> float:
         np.median(values[index * per_day:(index + 1) * per_day])
         for index in range(values.size // per_day)
     ])
-    if daily.size < 14:
+    weeks = daily.size // 7
+    if weeks < 3:
         return float("nan")
-    week_of = np.arange(daily.size) // 7
-    weekly = np.array([daily[week_of == week].mean() for week in np.unique(week_of)])
-    if weekly.size < 3 or weekly.mean() <= 0:
+    weekly = daily[:weeks * 7].reshape(weeks, 7).mean(axis=1)
+    if weekly.mean() <= 0:
         return float("nan")
     return float(100.0 * weekly.std() / weekly.mean())
 
@@ -191,13 +200,15 @@ def weekly_sens_cv(sens_per_step, step_minutes: float = 5.0) -> float:
 def _drift(d):
     if "sens" not in d:
         return float("nan")
-    return weekly_sens_cv(d["sens"], d.get("cadence", 300.0) / 60.0)
+    cadence = d.get("series_cadence", d.get("cadence", 300.0))
+    return weekly_sens_cv(d["sens"], cadence / 60.0)
 
 
 def _insulin_cv(d):
     if "insulin" not in d:
         return float("nan")
-    return insulin_weekly_cv(d["insulin"], d.get("cadence", 300.0) / 60.0)
+    cadence = d.get("series_cadence", d.get("cadence", 300.0))
+    return insulin_weekly_cv(d["insulin"], cadence / 60.0)
 
 
 SIGNATURES = (

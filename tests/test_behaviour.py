@@ -167,3 +167,26 @@ def test_readings_limit_caps_what_the_bridge_sees():
     )
     cycles = [item for item in bridge.requests if item["cmd"] == "cycle"]
     assert [len(item["readings"]) for item in cycles] == [1, 2, 2, 2, 2, 2]
+
+
+class AutoIsfBridge(FakeBridge):
+    def request(self, payload: dict) -> dict:
+        response = super().request(payload)
+        if payload["cmd"] == "cycle":
+            response["algorithm"] = {"sens": 77.0}
+        return response
+
+
+def test_loop_separates_applied_sensitivity_from_the_algorithm_output():
+    subject = load_subject("adult#001")
+    profile = AlgorithmProfile(
+        sens=50.0, carb_ratio=10.0, target_bg=110.0, current_basal=1.0, enable_auto_isf=True,
+    )
+    bridge = AutoIsfBridge()
+    loop = run_closed_loop(
+        subject, bridge, profile, Scenario(duration_min=15),
+        seed=1, noise_kind="none",
+    )
+    assert loop.cadence_min == 5.0
+    assert set(loop.applied_sens) == {50.0}
+    assert set(loop.variable_sens) == {77.0}

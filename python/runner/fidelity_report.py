@@ -75,7 +75,7 @@ def model_traces(
     count: int,
     behaviour: bool = False,
     days: int = 1,
-    isf_cv: float = 0.058,
+    isf_cv: float = 0.0,
     cr_cv: float = 0.0,
     readings_limit: int | None = None,
     workers: int = 1,
@@ -124,13 +124,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--real-dir", default=str(Path.home() / "Downloads/ukf_datasets"))
     parser.add_argument("--behaviour", action="store_true")
     parser.add_argument("--days", type=int, default=1)
-    parser.add_argument("--isf-cv", type=float, default=0.058)
+    parser.add_argument("--isf-cv", type=float, default=0.0)
     parser.add_argument("--cr-cv", type=float, default=0.0)
     parser.add_argument("--readings-limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--title", default="Fidelity scorecard")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
+    if args.readings_limit and args.readings_limit < 408:
+        parser.error("--readings-limit must be 0 or at least 408 (34 h at 5 min)")
 
     cgm, plasma = model_traces(
         load_subjects(), args.subjects, args.behaviour,
@@ -143,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     real = {name: evaluate(items) for name, items in real_traces(Path(args.real_dir)).items()}
 
     lines = [
-        "# A26 — fidelity scorecard: стенд против реального конверта",
+        f"# {args.title}",
         "",
         "Дата: 2026-11-26",
         "Статус: **принят как scorecard**, не как валидация.",
@@ -186,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         "model_cgm": model, "model_plasma": model_plasma, "real": real,
         "subjects": args.subjects, "behaviour": args.behaviour,
         "days": args.days, "isf_cv": args.isf_cv, "cr_cv": args.cr_cv,
+        "readings_limit": args.readings_limit or None, "workers": args.workers,
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0
