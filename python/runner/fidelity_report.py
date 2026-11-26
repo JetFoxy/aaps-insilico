@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
+from cgm.compression import CompressionConfig
 from cgm.validate_sensors import load_trace
 from runner.behaviour import BehaviourConfig
 from runner.closed_loop import (
@@ -28,6 +29,13 @@ from simcore.population import compute_cf, compute_cr, compute_tdi
 MEALS = [(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)]
 SETTINGS = ROOT / "data/raw/settings.json"
 REAL_FILES = ("sibionics2.csv", "libre2.csv", "aidex.csv")
+
+
+def compression_for(rate_per_30d: float):
+    """Compression artefacts are opt-in; the rate is events per 30 days."""
+    if rate_per_30d <= 0:
+        return None
+    return CompressionConfig(rate_per_30d=float(rate_per_30d))
 
 
 def prefs() -> dict:
@@ -48,12 +56,13 @@ def profile_for(subject) -> AlgorithmProfile:
 
 
 def run_subject(task):
-    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit = task
+    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate = task
     profile = profile_for(subject)
     scenario = Scenario(
         duration_min=int(days) * 24 * 60,
         meals=meals_for_days(MEALS, days),
         behaviour=BehaviourConfig() if behaviour else None,
+        compression=compression_for(compression_rate),
     )
     seed = zlib.crc32(name.encode()) & 0xFFFF
     schedule = adaptive_profile_schedule(profile, days, isf_cv, cr_cv, seed)
@@ -79,10 +88,11 @@ def model_traces(
     cr_cv: float = 0.0,
     readings_limit: int | None = None,
     workers: int = 1,
+    compression_rate: float = 0.0,
     runner=None,
 ) -> tuple[list[dict], list[dict]]:
     tasks = [
-        (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit)
+        (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate)
         for name in sorted(subjects)[:count]
     ]
     run = runner or run_subject
@@ -128,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cr-cv", type=float, default=0.0)
     parser.add_argument("--readings-limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--compression-rate", type=float, default=0.0)
     parser.add_argument("--title", default="Fidelity scorecard")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
@@ -140,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         days=args.days, isf_cv=args.isf_cv, cr_cv=args.cr_cv,
         readings_limit=args.readings_limit or None,
         workers=args.workers,
+        compression_rate=args.compression_rate,
     )
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
@@ -190,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         "subjects": args.subjects, "behaviour": args.behaviour,
         "days": args.days, "isf_cv": args.isf_cv, "cr_cv": args.cr_cv,
         "readings_limit": args.readings_limit or None, "workers": args.workers,
+        "compression_rate": args.compression_rate,
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0

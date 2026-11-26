@@ -74,3 +74,21 @@ Steps:
   `insulin_weekly_cv` (the rolling window consumes one day); a shorter run must be `n/a`.
 - `isf_cv=0.15` must be presented as the imposed amplitude taken from the measured 8-22 % range,
   not as a model shortfall; the measured `drift` is an estimator of that knob.
+
+## Task 4 — scorecard with compression and behaviour (A29)
+
+Files: `python/runner/fidelity_report.py`, `tests/test_fidelity_report.py`
+
+1. RED: `compression_for(0)` returns `None`; `compression_for(3.5)` returns a config with that rate.
+2. GREEN: add `--compression-rate` (events per 30 days, 0 = off) and pass
+   `CompressionConfig(rate_per_30d=...)` into `Scenario`; source the default rate from TimSim's
+   measured 1.9–5.3 per 30 days (midpoint 3.5).
+3. Run 30 subjects × 22 days, drift 15 %, `--behaviour --compression-rate 3.5`; compare A28.
+4. Write `docs/acceptance/A29.md`; commit.
+
+## Task 5 — drift amplitude sweep (A30)
+
+1. Same 30×22 days, no behaviour/compression, `isf_cv` 0.08 and 0.22; reuse the 0.15 arm from A28.
+2. Show measured `drift` and `insulin_cv` against the imposed amplitude: this validates the
+   estimator, not the person.
+3. Write `docs/acceptance/A30.md`; commit.
