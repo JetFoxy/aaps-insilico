@@ -221,6 +221,16 @@ ablation rather than assumed. M3 does the opposite: adding it (A31) pushes `acf6
 `diurnal` to 138.9 and `hypo_rec` down to 45.0, so it belongs in robustness runs, not in the
 fidelity baseline. `hypo_reb` 47.7 and `diurnal` 64.4 remain outside. Report: `A33.md`.
 
+### A34 — paired analysis: template vs fixed meals
+
+The same two arms with per-subject signatures, paired by subject. The eating template improves
+`tail` (Δ −3.00, 23/30, p=0.005), `diurnal` (Δ −104.2, 30/30, p<0.001), `hypo_rec` (Δ −5.0,
+19/30, p=0.029) and `hypo_reb` (Δ −7.4, 20/30, p=0.036); `cv` (Δ −10.7) and `outcome` (Δ −12.3)
+improve in median with a bootstrap CI excluding zero but fail the sign test (p=0.099 / 0.061), so
+the gain is concentrated in a subset. `acf60` rises consistently but stays in range; `compress`,
+`noise`, `drift` and `insulin_cv` do not move. This confirms that the fixed three-meal schedule
+was a real part of the CV/tail gap, not a modelling excuse. Report: `A34.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
