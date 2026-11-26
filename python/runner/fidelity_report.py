@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "python"))
 
 from bridge.client import Bridge, insulin_from_settings, load_prefs
 from cgm.validate_sensors import load_trace
+from runner.behaviour import BehaviourConfig
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.fidelity import evaluate, from_loop, in_real_range, report, trace
 from runner.options import RESIDUALS
@@ -35,13 +36,16 @@ def profile_for(subject) -> AlgorithmProfile:
     )
 
 
-def model_traces(subjects: dict, count: int) -> tuple[list[dict], list[dict]]:
+def model_traces(subjects: dict, count: int, behaviour: bool = False) -> tuple[list[dict], list[dict]]:
     cgm, plasma = [], []
     with Bridge() as bridge:
         for name in [key for key in sorted(subjects)][:count]:
             subject = subjects[name]
             profile = profile_for(subject)
-            scenario = Scenario(duration_min=24 * 60, meals=MEALS)
+            scenario = Scenario(
+                duration_min=24 * 60, meals=MEALS,
+                behaviour=BehaviourConfig() if behaviour else None,
+            )
             init_bridge(bridge, subject, PREFS, INSULIN, profile, scenario)
             loop = run_closed_loop(
                 subject, bridge, profile, scenario,
@@ -79,11 +83,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--subjects", type=int, default=30)
     parser.add_argument("--real-dir", default=str(Path.home() / "Downloads/ukf_datasets"))
+    parser.add_argument("--behaviour", action="store_true")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
 
-    cgm, plasma = model_traces(load_subjects(), args.subjects)
+    cgm, plasma = model_traces(load_subjects(), args.subjects, args.behaviour)
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
     real = {name: evaluate(items) for name, items in real_traces(Path(args.real_dir)).items()}
@@ -129,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     Path(args.out).write_text("\n".join(lines), encoding="utf-8")
     Path(args.json).write_text(json.dumps({
         "model_cgm": model, "model_plasma": model_plasma, "real": real,
-        "subjects": args.subjects,
+        "subjects": args.subjects, "behaviour": args.behaviour,
     }, indent=2), encoding="utf-8")
     print("\n".join(lines))
     return 0

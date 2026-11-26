@@ -371,6 +371,7 @@ look-ahead исправлен; `COB > 0` вне области W1).
 | A24 ✅ | Compression lows (ложные низы) | CGM TBR/TIR искажаются сильнее истинных; CGM и TRUE LBGI расходятся в знаке уже в baseline — `docs/acceptance/A24.md` |
 | A25 ✅ | Pre-registered safety gate | Все плечи fail по индивидуальным хвостам (worst >60 мин/сут <54, >120 мин непрерывно, TBR >10 %); DynISF worst; gate — скрин, не доказательство — `docs/acceptance/A25.md` |
 | A26 ✅ | Fidelity scorecard (10 статистик TimSim) | Модель 2/9 в конверте; пробелы hypo_rec/reb, compression, diurnal/outcome; реальные трейсы 1–5/10; scorecard, не валидация — `docs/acceptance/A26.md` |
+| A27 ✅ | Fidelity scorecard с behaviour | Rescue улучшает hypo_rec 113.8→77.5, но не в конверт; hypo_reb 100 %; scorecard 2/9 — `docs/acceptance/A27.md` |
 
 **Поправка 2026-11-11 (важно).** В контуре найден баг: SMB-болюсы попадали в журнал и в IOB,
 но не подавались в физиологическую модель. Исправлено (`Schedule.boluses` следующего сегмента,
