@@ -96,3 +96,19 @@ def test_evaluate_reports_drift_and_insulin_cv_only_when_the_trace_carries_them(
     stats = evaluate([carried])
     assert stats["insulin_cv"][0] == 0.0
     assert stats["drift"][0] == 0.0
+
+
+def _fake_subject_runner(task):
+    name = task[0]
+    return ({"name": name}, {"name": name})
+
+
+def test_model_traces_keeps_order_across_workers():
+    from runner.fidelity_report import model_traces
+
+    subjects = {f"s{index}": f"s{index}" for index in range(4)}
+    plain = model_traces(subjects, 3, workers=1, runner=_fake_subject_runner)
+    parallel = model_traces(subjects, 3, workers=2, runner=_fake_subject_runner)
+    assert [item["name"] for item in plain[0]] == ["s0", "s1", "s2"]
+    assert [item["name"] for item in parallel[0]] == ["s0", "s1", "s2"]
+    assert [item["name"] for item in parallel[1]] == ["s0", "s1", "s2"]

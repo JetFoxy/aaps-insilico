@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import multiprocessing as mp
 import sys
 import zlib
 from pathlib import Path
@@ -19,15 +20,22 @@ from runner.closed_loop import (
     AlgorithmProfile, Scenario, adaptive_profile_schedule, init_bridge, meals_for_days,
     run_closed_loop,
 )
-from runner.fidelity import evaluate, from_loop, in_real_range, report, trace
+from runner.fidelity import SIGNATURES, evaluate, from_loop, in_real_range, report, trace
 from runner.options import RESIDUALS
 from simcore.params import load_subjects
 from simcore.population import compute_cf, compute_cr, compute_tdi
 
 MEALS = [(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)]
-PREFS = load_prefs(ROOT / "data/raw/settings.json")
-INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
+SETTINGS = ROOT / "data/raw/settings.json"
 REAL_FILES = ("sibionics2.csv", "libre2.csv", "aidex.csv")
+
+
+def prefs() -> dict:
+    return load_prefs(SETTINGS)
+
+
+def insulin() -> dict:
+    return insulin_from_settings(SETTINGS, "Lyumjev 45m 8h 100 ед")
 
 
 def profile_for(subject) -> AlgorithmProfile:
@@ -39,6 +47,29 @@ def profile_for(subject) -> AlgorithmProfile:
     )
 
 
+def run_subject(task):
+    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit = task
+    profile = profile_for(subject)
+    scenario = Scenario(
+        duration_min=int(days) * 24 * 60,
+        meals=meals_for_days(MEALS, days),
+        behaviour=BehaviourConfig() if behaviour else None,
+    )
+    seed = zlib.crc32(name.encode()) & 0xFFFF
+    schedule = adaptive_profile_schedule(profile, days, isf_cv, cr_cv, seed)
+    with Bridge() as bridge:
+        init_bridge(bridge, subject, prefs(), insulin(), profile, scenario)
+        loop = run_closed_loop(
+            subject, bridge, profile, scenario,
+            seed=seed, residuals=RESIDUALS, noise_kind="residuals",
+            profile_schedule=schedule or None, readings_limit=readings_limit,
+        )
+    item = from_loop(loop, plasma=True)
+    item.pop("insulin", None)
+    item.pop("sens", None)
+    return from_loop(loop), item
+
+
 def model_traces(
     subjects: dict,
     count: int,
@@ -47,31 +78,20 @@ def model_traces(
     isf_cv: float = 0.058,
     cr_cv: float = 0.0,
     readings_limit: int | None = None,
+    workers: int = 1,
+    runner=None,
 ) -> tuple[list[dict], list[dict]]:
-    cgm, plasma = [], []
-    with Bridge() as bridge:
-        for name in [key for key in sorted(subjects)][:count]:
-            subject = subjects[name]
-            profile = profile_for(subject)
-            scenario = Scenario(
-                duration_min=int(days) * 24 * 60,
-                meals=meals_for_days(MEALS, days),
-                behaviour=BehaviourConfig() if behaviour else None,
-            )
-            seed = zlib.crc32(name.encode()) & 0xFFFF
-            schedule = adaptive_profile_schedule(profile, days, isf_cv, cr_cv, seed)
-            init_bridge(bridge, subject, PREFS, INSULIN, profile, scenario)
-            loop = run_closed_loop(
-                subject, bridge, profile, scenario,
-                seed=seed, residuals=RESIDUALS, noise_kind="residuals",
-                profile_schedule=schedule or None, readings_limit=readings_limit,
-            )
-            cgm.append(from_loop(loop))
-            item = from_loop(loop, plasma=True)
-            item.pop("insulin", None)
-            item.pop("sens", None)
-            plasma.append(item)
-    return cgm, plasma
+    tasks = [
+        (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit)
+        for name in sorted(subjects)[:count]
+    ]
+    run = runner or run_subject
+    if workers > 1:
+        with mp.Pool(processes=workers) as pool:
+            pairs = pool.map(run, tasks, chunksize=1)
+    else:
+        pairs = [run(task) for task in tasks]
+    return [pair[0] for pair in pairs], [pair[1] for pair in pairs]
 
 
 def real_traces(directory: Path) -> dict[str, list[dict]]:
@@ -91,7 +111,9 @@ def table(title: str, stats: dict) -> list[str]:
     lines = [f"### {title}", "", "```", report(stats), "```", ""]
     inside = sum(1 for key, _ in stats.items() if in_real_range(key, stats[key][0]))
     finite = sum(1 for key, _ in stats.items() if np.isfinite(stats[key][0]))
-    lines.append(f"В диапазоне: {inside}/{finite} (всего подписей 10).")
+    lines.append(
+        f"В диапазоне: {inside}/{finite} (определено {finite} из {len(SIGNATURES)})."
+    )
     lines.append("")
     return lines
 
@@ -105,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--isf-cv", type=float, default=0.058)
     parser.add_argument("--cr-cv", type=float, default=0.0)
     parser.add_argument("--readings-limit", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
@@ -113,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         load_subjects(), args.subjects, args.behaviour,
         days=args.days, isf_cv=args.isf_cv, cr_cv=args.cr_cv,
         readings_limit=args.readings_limit or None,
+        workers=args.workers,
     )
     model = evaluate(cgm)
     model_plasma = evaluate(plasma)
