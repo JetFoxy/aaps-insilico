@@ -342,8 +342,11 @@ is heavy-tailed. The broken model-CF branch in `dynisf_compare` was fixed here. 
 
 Fitting the three-compartment model to the Lyumjev label mean curve (15 U) matches the 1–5 h points
 (3.5 % max error) but yields Tmax 77 min against the label's 57 and 50 % Cmax at 43 min against 13.
-The pre-registered criterion (≤15 % and Tmax 45–70) fails, so no `--insulin-pk lyumjev` variant is
-added. The tool and the negative result are kept. Report: `A46.md`.
+The pre-registered criterion fails, so no variant is added. Colmegna 2024 (PMC11089876)
+independently reports the same waterbed for a one-chain model and publishes a candidate Michaelis–
+Menten structure with relative URLi factors (`ka1×13`, `kd×1.45`, `τ×0.5`, `KM×2.1`); the absolute
+`KM_LIS` is not in the text, so the model is still not assemblable. The tool and the negative result
+are kept. Report: `A46.md`.
 
 ### A47 — exogenous glucagon rescue: feasibility (not implemented)
 

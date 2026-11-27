@@ -57,7 +57,9 @@ Robust signatures: `compress` and `noise` (P≈1.0), `acf60` (0.96), `tail` (0.8
   tail — inside the published rapid-analog envelope (60–120 min, ~4–5 h). There is no source-backed
   reason to change `p2u/ki/m1–m4`; the long glucose nadir is a dose/meal/controller interaction.
 - **Lyumjev PK** (A46): the label mean curve is fitted to 3.5 % over 1–5 h, but Tmax is 77 min
-  against 57 and 50 % Cmax is 43 min against 13. The pre-registered criterion fails; no variant.
+  against 57 and 50 % Cmax is 43 min against 13. The pre-registered criterion fails. Colmegna 2024
+  independently reports the same one-chain waterbed and publishes a Michaelis–Menten candidate
+  structure with relative factors, but not the absolute `KM_LIS`; no variant until those exist.
 - **W2 absolute replay parity** (W2): the pin lacks the raw-observation estimator and autoISF
   IOB/COB inputs used by the recording; only relative deltas are claimed.
 - **S2017 population vector**: proprietary, so the cohort remains derived; page-level provenance
