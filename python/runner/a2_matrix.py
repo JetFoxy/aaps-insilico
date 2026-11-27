@@ -23,6 +23,7 @@ from runner.behaviour import BehaviourConfig
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
+from runner.profiles import cached_profile_values, eligible_names
 from simcore.params import load_subject
 from simcore.variability import si_day
 from simcore.population import cached_subject_profile
@@ -91,11 +92,9 @@ SCENARIOS = {
 }
 
 
-def profile_for(subject, auto_isf: bool, scale: float = 1.0, isf_source: str = "rule") -> AlgorithmProfile:
-    profile = cached_subject_profile(subject, isf_source)
-    cr = profile["cr"] or 10.5
-    tdi = profile["tdi"] or 40.0
-    isf = profile["isf"] or 50.0
+def profile_for(subject, auto_isf: bool, scale: float = 1.0, isf_source: str = "rule",
+                allow_fallback: bool = False) -> AlgorithmProfile:
+    cr, tdi, isf = cached_profile_values(subject, isf_source, allow_fallback)
     return AlgorithmProfile(
         sens=isf * scale, carb_ratio=cr * scale, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
@@ -120,7 +119,9 @@ def run_task(task: dict) -> dict:
         scenario = dataclasses.replace(
             scenario, si_multipliers=si_day(seed).multipliers, dawn_egp=1.5,
         )
-    profile = profile_for(subject, auto_isf, spec["profile_scale"], isf_source)
+    profile = profile_for(
+        subject, auto_isf, spec["profile_scale"], isf_source, task.get("allow_fallback", False),
+    )
     residuals = load_residuals(task.get("residuals_path"))
     if worker_bridge is None:
         raise RuntimeError("run_task requires the multiprocessing worker initializer")
@@ -201,11 +202,12 @@ def main() -> int:
     ap.add_argument("--variability", action="store_true")
     ap.add_argument("--isf-source", default="rule", choices=("rule", "model"))
     ap.add_argument("--out", default="out/a2_matrix.json")
+    ap.add_argument("--allow-profile-fallback", action="store_true")
     add_options(ap)
     args = ap.parse_args()
 
     cohort = load_cohort(args.cohort_copies, args.cohort_seed)
-    names = [name for name, _ in sorted(cohort.items())][: args.subjects]
+    names = eligible_names(cohort, args.allow_profile_fallback, isf_source=args.isf_source)[: args.subjects]
     prefs = apply_prefs(PREFS, args.pref)
     noise = noise_kwargs(args)
     scenarios = [s for s in args.scenarios.split(",") if s]
@@ -215,6 +217,7 @@ def main() -> int:
             "temp_mode": args.temp_mode, "variability": args.variability,
             "isf_source": args.isf_source, "prefs": prefs, "noise": noise,
             "residuals_path": args.noise_file, "behaviour": args.behaviour,
+            "allow_fallback": args.allow_profile_fallback,
         }
         for scenario in scenarios for name in names for auto_isf in (False, True)
     ]

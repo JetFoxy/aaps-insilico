@@ -25,6 +25,7 @@ from runner.closed_loop import (
 )
 from runner.fidelity import SIGNATURES, evaluate, from_loop, in_real_range, report, trace
 from runner.metrics import compute_metrics
+from runner.profiles import eligible_names, profile_values
 from runner.options import RESIDUALS
 from simcore.variability import si_day
 from simcore.params import load_subjects
@@ -94,32 +95,11 @@ def insulin() -> dict:
 
 
 def profile_for(subject, allow_fallback: bool = False) -> AlgorithmProfile:
-    """The subject's profile; refuse the arbitrary adult fallback unless explicitly allowed.
-
-    Three of the 30 derived subjects have no feasible CR under either the S2008 or the S2013
-    definition. The old fallback (CR 10.5, CF 50) over-insulinised them and drove the safety
-    tail; a run must skip them rather than invent a profile.
-    """
-    cr = compute_cr(subject)
-    if cr is None:
-        if not allow_fallback:
-            raise ValueError(f"{subject.name}: no feasible CR under S2008/S2013")
-        cr = 10.5
-    tdi = compute_tdi(subject, cr)
-    if tdi is None:
-        if not allow_fallback:
-            raise ValueError(f"{subject.name}: no feasible TDI")
-        tdi = 40.0
+    cr, tdi, isf = profile_values(subject, allow_fallback)
     return AlgorithmProfile(
-        sens=compute_cf(tdi) or 50.0, carb_ratio=cr, target_bg=110.0,
+        sens=isf, carb_ratio=cr, target_bg=110.0,
         current_basal=subject.basal_u_per_min * 60, enable_auto_isf=False,
     )
-
-
-def eligible_names(subjects: dict, allow_fallback: bool = False) -> list[str]:
-    if allow_fallback:
-        return sorted(subjects)
-    return [name for name in sorted(subjects) if compute_cr(subjects[name]) is not None]
 
 
 def run_subject(task):

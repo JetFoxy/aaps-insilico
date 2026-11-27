@@ -23,6 +23,7 @@ from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
 from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
 from simcore.variability import si_day
+from runner.profiles import eligible_names, profile_values
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -32,11 +33,9 @@ ARMS = ("off", "autoisf", "dynisf")
 KEYS = ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_while_falling_fraction")
 
 
-def run_task(task: tuple[str, str, object, bool, str]) -> dict:
-    name, arm, subject, variability, isf_source = task
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
-    isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
+def run_task(task: tuple[str, str, object, bool, str, bool]) -> dict:
+    name, arm, subject, variability, isf_source, allow_fallback = task
+    cr, tdi, isf = profile_values(subject, allow_fallback)
     profile = AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         current_basal=subject.basal_u_per_min * 60,
@@ -65,13 +64,14 @@ def main() -> int:
     ap.add_argument("--out", default="out/dynisf_compare.json")
     ap.add_argument("--variability", action="store_true")
     ap.add_argument("--isf-source", default="rule", choices=("rule", "model"))
+    ap.add_argument("--allow-profile-fallback", action="store_true")
     add_options(ap)
     args = ap.parse_args()
 
     cohort = load_cohort(args.cohort_copies, args.cohort_seed)
-    names = [name for name, _ in sorted(cohort.items())][: args.subjects]
+    names = eligible_names(cohort, args.allow_profile_fallback)[: args.subjects]
     tasks = [
-        (name, arm, cohort[name], args.variability, args.isf_source)
+        (name, arm, cohort[name], args.variability, args.isf_source, args.allow_profile_fallback)
         for arm in ARMS for name in names
     ]
     started = time.time()

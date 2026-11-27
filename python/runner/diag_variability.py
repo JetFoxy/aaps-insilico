@@ -21,6 +21,7 @@ from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
 from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
 from simcore.variability import si_day
+from runner.profiles import eligible_names, profile_values
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -29,8 +30,8 @@ RESIDUALS = np.load(ROOT / "tests/fixtures/cgm_residuals.npy")
 VARIANTS = ("plain", "si", "dawn", "both")
 
 
-def run_task(task: tuple[str, str, str]) -> dict:
-    subject_name, variant, isf_source = task
+def run_task(task: tuple[str, str, str, bool]) -> dict:
+    subject_name, variant, isf_source, allow_fallback = task
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
     subject = load_subject(subject_name)
     si = si_day(seed).multipliers if variant in ("si", "both") else None
@@ -40,9 +41,9 @@ def run_task(task: tuple[str, str, str]) -> dict:
         meals=[(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)], meal_mode="fcl",
         si_multipliers=si, dawn_egp=dawn,
     )
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
-    isf = compute_isf_model(subject) if isf_source == "model" else (compute_cf(tdi) or 50.0)
+    cr, tdi, isf = profile_values(subject, allow_fallback)
+    if isf_source == "model":
+        isf = compute_isf_model(subject)
     profile = AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
@@ -63,9 +64,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--isf-source", default="rule", choices=("rule", "model"))
     parser.add_argument("--subjects", type=int, default=10)
+    parser.add_argument("--allow-profile-fallback", action="store_true")
     args = parser.parse_args()
-    subjects = [name for name, _ in sorted(load_subjects().items())][: args.subjects]
-    tasks = [(name, variant, args.isf_source) for variant in VARIANTS for name in subjects]
+    subjects = eligible_names(load_subjects(), args.allow_profile_fallback)[: args.subjects]
+    tasks = [
+        (name, variant, args.isf_source, args.allow_profile_fallback)
+        for variant in VARIANTS for name in subjects
+    ]
     started = time.time()
     with mp.Pool(processes=6) as pool:
         results = pool.map(run_task, tasks, chunksize=1)

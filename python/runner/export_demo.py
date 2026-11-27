@@ -21,7 +21,7 @@ from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_clos
 from runner.metrics import compute_metrics
 from runner.options import add_options, apply_prefs, noise_kwargs
 from simcore.params import load_subject
-from simcore.population import cached_subject_profile
+from runner.profiles import cached_profile_values
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -49,10 +49,7 @@ def build_scenario(name: str) -> tuple[Scenario, PumpConfig | None]:
 
 
 def profile_for(subject, auto_isf: bool, isf_source: str = "rule", smb_ratio_3min: float = 0.3, algorithm: str = "autoisf") -> AlgorithmProfile:
-    cached = cached_subject_profile(subject, isf_source)
-    cr = cached["cr"] or 10.5
-    tdi = cached["tdi"] or 40.0
-    isf = cached["isf"] or 50.0
+    cr, tdi, isf = cached_profile_values(subject, isf_source)
     return AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,

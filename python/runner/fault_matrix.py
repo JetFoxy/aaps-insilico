@@ -25,6 +25,7 @@ from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_clos
 from runner.site import SiteFailure
 from runner.metrics import compute_metrics
 from runner.options import RESIDUALS, add_options, apply_prefs, load_cohort, load_residuals, noise_kwargs
+from runner.profiles import eligible_names, profile_values
 from simcore.population import compute_cf, compute_cr, compute_tdi
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
@@ -68,11 +69,11 @@ FAULTS: dict[str, dict] = {
 }
 
 
-def profile_for(subject, auto_isf: bool = False, algorithm: str = "autoisf") -> AlgorithmProfile:
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
+def profile_for(subject, auto_isf: bool = False, algorithm: str = "autoisf",
+                allow_fallback: bool = False) -> AlgorithmProfile:
+    cr, tdi, isf = profile_values(subject, allow_fallback)
     return AlgorithmProfile(
-        sens=compute_cf(tdi) or 50.0, carb_ratio=cr, target_bg=110.0,
+        sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
         enable_auto_isf=auto_isf, algorithm=algorithm, tdd=tdi,
     )
@@ -88,7 +89,7 @@ def run_task(task: dict) -> dict:
     scenario = spec["scenario"]
     if task.get("behaviour"):
         scenario = dataclasses.replace(scenario, behaviour=BehaviourConfig())
-    profile = profile_for(subject, auto_isf, algorithm)
+    profile = profile_for(subject, auto_isf, algorithm, task.get("allow_fallback", False))
     seed = zlib.crc32(subject_name.encode()) & 0xFFFF
     residuals = load_residuals(task.get("residuals_path"))
     with Bridge() as bridge:
@@ -120,11 +121,12 @@ def main() -> int:
     ap.add_argument("--dynisf", action="store_true", help="also run the DynISF arm and report off vs dynisf")
     ap.add_argument("--faults", default="", help="comma-separated fault names (default: all)")
     ap.add_argument("--out", default="out/fault_matrix.json")
+    ap.add_argument("--allow-profile-fallback", action="store_true")
     add_options(ap)
     args = ap.parse_args()
 
     cohort = load_cohort(args.cohort_copies, args.cohort_seed)
-    names = [name for name, _ in sorted(cohort.items())][: args.subjects]
+    names = eligible_names(cohort, args.allow_profile_fallback)[: args.subjects]
     faults = [name for name in args.faults.split(",") if name] or list(FAULTS)
     unknown = [name for name in faults if name not in FAULTS]
     if unknown:
@@ -139,7 +141,7 @@ def main() -> int:
     tasks = [
         {"subject": cohort[name], "fault": fault, "auto_isf": auto_isf, "algorithm": algorithm,
          "prefs": prefs, "noise": noise, "residuals_path": args.noise_file,
-         "behaviour": args.behaviour}
+         "behaviour": args.behaviour, "allow_fallback": args.allow_profile_fallback}
         for fault in faults for name in names for auto_isf, algorithm in arms
     ]
     started = time.time()

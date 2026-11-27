@@ -18,6 +18,7 @@ from bridge.client import Bridge, insulin_from_settings, load_prefs
 from runner.closed_loop import AlgorithmProfile, Scenario, init_bridge, run_closed_loop
 from runner.metrics import compute_metrics
 from simcore.params import load_subjects
+from runner.profiles import eligible_names, profile_values
 from simcore.population import compute_cf, compute_cr, compute_tdi
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
@@ -26,10 +27,8 @@ RESIDUALS = np.load(ROOT / "tests/fixtures/cgm_residuals.npy")
 SCENARIO = Scenario(name="fcl-3meals", duration_min=24 * 60, meals=[(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)], meal_mode="fcl")
 
 
-def profile_for(subject, auto_isf: bool) -> AlgorithmProfile:
-    cr = compute_cr(subject) or 10.5
-    tdi = compute_tdi(subject, cr) or 40.0
-    isf = compute_cf(tdi) or 50.0
+def profile_for(subject, auto_isf: bool, allow_fallback: bool = False) -> AlgorithmProfile:
+    cr, tdi, isf = profile_values(subject, allow_fallback)
     return AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         max_iob=12.0, max_basal=4.0, current_basal=subject.basal_u_per_min * 60,
@@ -52,8 +51,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=5)
     ap.add_argument("--out", default="out/autoisf_compare.json")
+    ap.add_argument("--allow-profile-fallback", action="store_true")
     args = ap.parse_args()
-    subjects = [s for name, s in sorted(load_subjects().items())][: args.limit]
+    cohort = load_subjects()
+    names = eligible_names(cohort, args.allow_profile_fallback)[: args.limit]
+    subjects = [cohort[name] for name in names]
     started = time.time()
     rows = []
     for subject in subjects:
