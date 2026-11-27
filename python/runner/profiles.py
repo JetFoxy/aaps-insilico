@@ -6,7 +6,9 @@ and drove the safety tail (A38). A caller that genuinely wants the old behaviour
 """
 from __future__ import annotations
 
-from simcore.population import cached_subject_profile, compute_cf, compute_cr, compute_tdi
+from simcore.population import (
+    cached_subject_profile, compute_cf, compute_cr, compute_isf_model, compute_tdi,
+)
 
 FALLBACK = (10.5, 40.0, 50.0)
 
@@ -33,6 +35,11 @@ def profile_values(subject, allow_fallback: bool = False):
     tdi = compute_tdi(subject, cr) if cr else None
     isf = compute_cf(tdi)
     return _checked(subject, cr, tdi, isf, allow_fallback)
+
+
+def isf_for_source(subject, source: str = "rule", allow_fallback: bool = False) -> float:
+    _, _, isf = profile_values(subject, allow_fallback)
+    return compute_isf_model(subject) if source == "model" else isf
 
 
 def cached_profile_values(subject, isf_source: str = "rule", allow_fallback: bool = False):

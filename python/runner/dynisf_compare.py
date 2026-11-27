@@ -23,7 +23,7 @@ from runner.metrics import compute_metrics
 from simcore.params import load_subject, load_subjects
 from simcore.population import compute_cf, compute_cr, compute_isf_model, compute_tdi
 from simcore.variability import si_day
-from runner.profiles import eligible_names, profile_values
+from runner.profiles import eligible_names, isf_for_source, profile_values
 
 PREFS = load_prefs(ROOT / "data/raw/settings.json")
 INSULIN = insulin_from_settings(ROOT / "data/raw/settings.json", "Lyumjev 45m 8h 100 ед")
@@ -35,7 +35,8 @@ KEYS = ("tir_70_180", "tbr_70", "lbgi", "smb_count", "total_insulin", "insulin_w
 
 def run_task(task: tuple[str, str, object, bool, str, bool]) -> dict:
     name, arm, subject, variability, isf_source, allow_fallback = task
-    cr, tdi, isf = profile_values(subject, allow_fallback)
+    cr, tdi, _ = profile_values(subject, allow_fallback)
+    isf = isf_for_source(subject, isf_source, allow_fallback)
     profile = AlgorithmProfile(
         sens=isf, carb_ratio=cr, target_bg=110.0,
         current_basal=subject.basal_u_per_min * 60,
