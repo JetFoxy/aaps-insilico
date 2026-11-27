@@ -366,6 +366,14 @@ supplement S1–S10 (weights, priors, fold parameters) is publisher/Cloudflare-b
 insulin-PK formula is garbled, and no digitized curves exist. Tuning `F01/ST` to reach 5–8 would be
 fitting, so the prototype was removed and the full model stays blocked. Report: `A48.md`.
 
+### A49 — constrained Lyumjev derivation in the MM structure (negative)
+
+With the Colmegna structure and URLi ratios fixed, only `KM_LIS` and `VI` were fitted to the label
+curve. Tmax (53 min) and 50 % Cmax (17.5 min) land in the pre-registered windows, but the maximum
+relative error is **25.5 %** against the 10 % criterion; a synthetic recovery also fails (`KM` 318
+against a true 1500, 14–54 % error), so the five-point curve does not identify even two parameters.
+No `lyumjev` variant is added; absolute `KM_LIS` or author data are required. Report: `A49.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
