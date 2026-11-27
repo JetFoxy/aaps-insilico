@@ -207,12 +207,13 @@ Report: `A31.md`.
 
 ### A32 — counterregulation: source review (blocked)
 
-TimSim's `glucagon.py` exists but is refuted in its own source: its action contributes ~0.001
-mg/kg/min against a 0.42–0.84 production target, its dynamic arm has the ordering backwards, and
-the secretion parameters are unpublished (Dalla Man 2014; Pompa 2021). The catecholamine arm has
-no published concentration-to-EGP parameters. Wiring any of this to close `hypo_reb` would be
-fitting, not modelling, so the mechanism stays out and `hypo_reb` stays a reported gap with a
-known direction. Reports: `A32.md`.
+Action parameters are published (Wendt 2017, eight T1D subjects: Emax 56–84 µmol/kg/min, CE50
+141–436 pg/ml; Emami/Haidar Bayesian posteriors; Hinshaw 2015 sensitivity), but every model takes
+**glucagon concentration** as input, and Wendt explicitly excludes the endogenous response to
+hypoglycaemia. Secretion driven by falling glucose is unpublished, and the glucose-dependence of
+hepatic glucagon sensitivity is unstudied (Hinshaw 2015). Both branches are exogenous glucagon in
+T1D. Wiring this to close `hypo_reb` would be fitting, not modelling; the only legitimate use is an
+exogenous mini-dose rescue scenario. Report: `A32.md`.
 
 ### A33 — ablation: template meals without M3
 

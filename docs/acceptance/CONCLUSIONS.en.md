@@ -48,9 +48,11 @@ Robust signatures: `compress` and `noise` (P≈1.0), `acf60` (0.96), `tail` (0.8
 
 ## 5. What is blocked, and why
 
-- **Counterregulation** (A32): the published glucagon model cannot carry the rebound (~0.001 vs
-  0.42–0.84 mg/kg/min) and its dynamic ordering is wrong; secretion parameters are unpublished.
-  Wiring it would be fitting. `hypo_reb` stays a reported gap.
+- **Counterregulation** (A32): action parameters are published (Wendt 2017: Emax 56–84
+  µmol/kg/min, CE50 141–436 pg/ml; Emami/Haidar), but every model takes glucagon concentration as
+  input and excludes the endogenous response to hypoglycaemia; secretion driven by falling glucose
+  is unpublished, and the glucose-dependence of hepatic sensitivity is unstudied (Hinshaw 2015).
+  Wiring it would be fitting; only an exogenous rescue scenario is legitimate.
 - **Insulin action parameters** (A44): the model's action curve peaks at 83 min with a ~304 min
   tail — inside the published rapid-analog envelope (60–120 min, ~4–5 h). There is no source-backed
   reason to change `p2u/ki/m1–m4`; the long glucose nadir is a dose/meal/controller interaction.
