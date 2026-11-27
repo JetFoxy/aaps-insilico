@@ -35,6 +35,7 @@ algorithm variants under identical scenarios.
   convergence at 35 days), A37 (a safety gate over 660 subject-days), A38 (diagnostics and the profile-fallback correction), A39 (key comparisons rerun on valid
   profiles), A40 (the canonical strict rerun), A41 (the remaining longest-low diagnosis), A42 (a subcutaneous insulin kinetics source review), A43 (the lispro PK variant check), A44 (the insulin action curve vs the literature), A45 (a strict rerun of the remaining
   comparisons), A46 (a Lyumjev parameter derivation — negative).
+  Consolidated conclusions: [`docs/acceptance/CONCLUSIONS.en.md`](docs/acceptance/CONCLUSIONS.en.md).
   English summary of every milestone and comparison:
   [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md).
 - What-if on your own Nightscout data: W1 (import), W2 (replay parity — red, with a documented

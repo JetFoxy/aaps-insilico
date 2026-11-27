@@ -37,6 +37,7 @@ UVA/Padova-подобным виртуальным пациентом (урав�
   на 35 сутках), A37 (safety gate на 660 subject-days), A38 (диагностика и коррекция fallback-профиля), A39 (перезапуск ключевых сравнений на
   валидных профилях), A40 (канонический строгий пересчёт), A41 (диагностика оставшегося longest-low), A42 (source review кинетики подкожного инсулина), A43 (проверка варианта lispro), A44 (кривая действия инсулина против литературы), A45 (строгий перепрогон оставшихся
   сравнений), A46 (деривация параметров Lyumjev — negative).
+  Сводные выводы: [`docs/acceptance/CONCLUSIONS.ru.md`](docs/acceptance/CONCLUSIONS.ru.md).
   Сводка на английском: [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md);
   на русском: [`docs/acceptance/SUMMARY.ru.md`](docs/acceptance/SUMMARY.ru.md).
 - What-if на своих данных Nightscout: W1 (импорт), W2 (паритет replay — red, с документированным

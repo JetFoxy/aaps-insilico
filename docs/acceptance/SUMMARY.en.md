@@ -6,6 +6,8 @@ The full reports are in Russian next to this file (`A1.md` … `A28.md`, `M0.md`
 `W1.md` … `W4.md`). This page is the English entry point: what was built, what was measured, and
 how to read the numbers.
 
+Consolidated conclusions across the series: [`CONCLUSIONS.en.md`](CONCLUSIONS.en.md).
+
 **Nothing here is clinical evidence.** The cohort is a *derived* S2008/S2013 set on S2017 equations,
 not the proprietary S2017 population; absolute TIR/TBR values should not be compared with trials.
 
