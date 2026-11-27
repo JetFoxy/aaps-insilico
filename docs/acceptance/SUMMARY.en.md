@@ -287,6 +287,16 @@ Paired effects that survive at n=27: `tail` (−2.19, p=0.019), `diurnal` (−10
 (p=0.248/0.076/0.093), and `hypo_rec` sits exactly on 50.0. Cohort bootstrap: 7/12, 90 % interval
 [5, 9]. Report: `A40.md`.
 
+### A41 — the remaining longest-low
+
+Trace diagnostics of the strict template arm: the 150-min low belongs to `adult#009` (day 2,
+00:30, nadir 43.1). CGM−true stays within −5.6…+8.1, so compression is not involved, and 78 g of
+rescue carbohydrate over the event does not lift it. The subject received 28.7 U in the preceding
+8 h, a 0.3–0.75 U SMB train every 5 min after a 98 g meal; a second event (140 min) follows 31.4 U
+after a 46 g meal. The mechanism is SMB stacking against the model's long insulin tail (A3), not
+a layer artefact; a source-backed insulin-action change is required before touching it. Only one
+of 27 subjects crosses 120 min. Report: `A41.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
