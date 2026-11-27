@@ -345,6 +345,16 @@ Fitting the three-compartment model to the Lyumjev label mean curve (15 U) match
 The pre-registered criterion (≤15 % and Tmax 45–70) fails, so no `--insulin-pk lyumjev` variant is
 added. The tool and the negative result are kept. Report: `A46.md`.
 
+### A47 — exogenous glucagon rescue: feasibility (not implemented)
+
+Before adding mini-dose glucagon as a rescue layer, two published action mappings were compared at
+the same Wendt PK concentrations. For 100/200/300 µg the Hinshaw per-ng/mL mapping gives 0.011–0.032
+mg/kg/min, while the Wendt Emax/CE50 model gives 5.06–7.59 — a 235–471× gap, because one was
+measured at high insulin and the other at basal insulin with multiplicative suppression. The choice
+of formula would determine the result, so no additive layer is added; a correct implementation
+needs the full Wendt PD model with insulin input and validation against the published curves.
+Report: `A47.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
