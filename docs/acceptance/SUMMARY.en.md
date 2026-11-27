@@ -277,6 +277,16 @@ still loses TIR and adds TBR (FCL −1.3 pp TIR, +1.5 pp TBR, p=0.005); DynISF v
 arm (severe 0/1/3, worst 240–385 min/day below 54) with DynISF worst. Magnitudes are slightly
 smaller than the historical reports; absolute numbers should cite A39. Report: `A39.md`.
 
+### A40 — canonical strict rerun
+
+Fresh runs on the 27 valid profiles replace the filtered corrections of A33/A34/A37. Template
+scores **7 of 12**, fixed 4 of 12. Gate over 594 subject-days: template fails only longest-low
+(150 > 120) with worst `<54` 27.3 and TBR 0.077; fixed fails three criteria (141.6, 160, 0.163).
+Paired effects that survive at n=27: `tail` (−2.19, p=0.019), `diurnal` (−101, p<0.001),
+`hypo_reb` (−8.77, p=0.015) and `acf60` (+0.05, p=0.002); `cv`, `outcome` and `hypo_rec` do not
+(p=0.248/0.076/0.093), and `hypo_rec` sits exactly on 50.0. Cohort bootstrap: 7/12, 90 % interval
+[5, 9]. Report: `A40.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
