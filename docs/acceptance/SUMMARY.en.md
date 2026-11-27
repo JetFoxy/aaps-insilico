@@ -355,6 +355,14 @@ of formula would determine the result, so no additive layer is added; a correct 
 needs the full Wendt PD model with insulin input and validation against the published curves.
 Report: `A47.md`.
 
+### A48 — full Wendt PD: attempted and blocked by units
+
+A prototype with Wendt's equations and Tables 2–5 settled at a fasting glucose of **2.2 mmol/L
+(40 mg/dL)** instead of the protocol's 5–8, and a 3 U bolus lowered it by only 0.23 mmol/L. The
+supplement S1–S10 (weights, priors, fold parameters) is publisher/Cloudflare-blocked, the HTML
+insulin-PK formula is garbled, and no digitized curves exist. Tuning `F01/ST` to reach 5–8 would be
+fitting, so the prototype was removed and the full model stays blocked. Report: `A48.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
