@@ -50,3 +50,35 @@ def apply_lispro(subject: Subject, seed: int = 0) -> Subject:
     state[10] = isc1
     state[11] = isc2
     return Subject(name=subject.name, state0=state, params=params)
+
+
+LYUMJEV_LABEL = {
+    "times_min": [0.0, 60.0, 120.0, 180.0, 240.0, 300.0],
+    "concentration_pmol_l": [0.0, 555.0, 450.0, 205.0, 73.0, 28.0],
+    "dose_u": 15.0,
+    "source": "Lyumjev US prescribing information, section 12.2 (mean, healthy subjects)",
+    "tmax_min": 57.0,
+    "half_max_min": 13.0,
+}
+
+
+def plasma_curve(dose_u, times, tau, ka1, ka2, alpha, vi, ke, bw):
+    """Plasma lispro concentration after one SC bolus, same three-compartment structure."""
+    from scipy.linalg import expm
+
+    kd = float(ka2) + float(alpha)
+    matrix = np.array([
+        [-(ka1 + kd), 0.0, 0.0],
+        [kd, -ka2, 0.0],
+        [ka1, ka2, -ke],
+    ])
+    dose_pmol = float(dose_u) * U_TO_PMOL
+    volume_l = float(vi) * float(bw)
+    out = np.zeros(len(times), dtype=float)
+    for index, time_min in enumerate(times):
+        elapsed = float(time_min) - float(tau)
+        if elapsed <= 0:
+            continue
+        state = expm(matrix * elapsed) @ np.array([dose_pmol, 0.0, 0.0])
+        out[index] = state[2] / volume_l
+    return out

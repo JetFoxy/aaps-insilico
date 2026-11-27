@@ -48,3 +48,28 @@ def test_lispro_shortens_the_one_unit_nadir_for_a_slow_subject():
         variant, Schedule(variant.basal_u_per_min, boluses=[Bolus(0.0, 1.0)]), 600, 1.0,
     )
     assert int(np.argmin(new.glucose)) < int(np.argmin(old.glucose))
+
+
+def test_plasma_curve_is_linear_in_dose_and_starts_at_zero():
+    from simcore.insulin_pk import plasma_curve
+
+    times = np.array([0.0, 30.0, 60.0, 120.0, 240.0])
+    kw = dict(tau=6.0, ka1=0.002, ka2=0.013, alpha=0.015, vi=0.135, ke=0.113, bw=70.0)
+    one = plasma_curve(1.0, times, **kw)
+    two = plasma_curve(2.0, times, **kw)
+    assert one[0] == 0.0
+    np.testing.assert_allclose(two, 2.0 * one, rtol=1e-10)
+    assert one.max() > 0
+
+
+def test_lyumjev_fit_recovers_a_synthetic_curve():
+    from simcore.insulin_pk import LYUMJEV_LABEL, plasma_curve
+    from runner.derive_lyumjev import fit_lyumjev
+
+    true = dict(tau=8.0, ka1=0.0025, ka2=0.016, alpha=0.02, vi=0.14, ke=0.113, bw=70.0)
+    times = np.array(LYUMJEV_LABEL["times_min"], dtype=float)
+    curve = plasma_curve(15.0, times, **true)
+    fit = fit_lyumjev(times[1:], curve[1:], dose_u=15.0, ke=0.113, bw=70.0)
+    assert fit["ok"]
+    for key in ("ka1", "ka2", "alpha", "vi"):
+        assert abs(fit[key] - true[key]) / true[key] < 0.5
