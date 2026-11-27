@@ -317,6 +317,15 @@ p=0.006); TIR is 0.775 against 0.798. The 1 U nadir is shorter only in 17/27 sub
 231 → 219), so the long tail is dominated by the insulin-action model, not SC absorption. The
 variant stays opt-in; the baseline is unchanged. Report: `A43.md`.
 
+### A44 — insulin action curve vs the literature (blocked)
+
+The model's action state after 1 U peaks at 83 min with a ~304 min 10 % tail, for both S2008 and
+lispro. Published rapid-acting analogs peak at 60–120 min and last ~4–5 h (StatPearls; CDC), so the
+model's action is inside the envelope and no source-backed change to `p2u/ki/m1–m4` exists. The long
+glucose nadir is therefore a dose/meal/controller interaction, not an over-long action curve. The
+model-tuning line closes: remaining `diurnal`, `hypo_reb` and longest-low need new controller/data,
+not coefficient changes. Report: `A44.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
