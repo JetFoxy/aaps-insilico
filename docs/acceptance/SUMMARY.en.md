@@ -308,6 +308,15 @@ opt-in `--insulin-pk lispro` variant (default unchanged): shorter absorption pea
 longest-low no worse, diurnal/TIR no worse. Values are for lispro, not Lyumjev, and not the S2017
 subject vector; the implementation is A43. Report: `A42.md`.
 
+### A43 — lispro PK variant: pre-registration check
+
+The opt-in lispro variant is implemented and run (27 subjects × 22 days, all layers). It removes
+the prolonged low (longest 150 → 115, severe 2 → 0) and the gate passes for the first time, but
+the scorecard drops 7 → 6 because `hypo_rec` falls to 45.0 and `diurnal` rises to 70.0 (+2.95,
+p=0.006); TIR is 0.775 against 0.798. The 1 U nadir is shorter only in 17/27 subjects (median
+231 → 219), so the long tail is dominated by the insulin-action model, not SC absorption. The
+variant stays opt-in; the baseline is unchanged. Report: `A43.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
