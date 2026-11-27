@@ -13,7 +13,7 @@ UVA/Padova-подобным виртуальным пациентом (урав�
 алгоритма при одинаковых сценариях.
 
 - Статус: W1 принят (паритет моста на записанных данных Nightscout), этапы M0–M8 приняты,
-  сравнения A1–A44 приняты. JVM-мост запускает реальные `UnscentedKalmanFilterPlugin`,
+  сравнения A1–A46 приняты. JVM-мост запускает реальные `UnscentedKalmanFilterPlugin`,
   `AutosensDataStoreObject`, `GlucoseStatusCalculatorAutoIsf`, конвейер COB/autosens и
   `DetermineBasalAutoISF`. Отчёты: [`docs/reports/W1.md`](docs/reports/W1.md) и
   [`docs/acceptance/`](docs/acceptance/).
@@ -35,7 +35,8 @@ UVA/Padova-подобным виртуальным пациентом (урав�
   дрейфа), A31 (шаблонная еда и M3-вариативность), A32 (source review по контррегуляции —
   blocked), A33 (абляция: шаблонная еда без M3), A34 (парный анализ шаблона еды), A35 (ресемплинг когорты), A36 (сходимость оценщика дрейфа
   на 35 сутках), A37 (safety gate на 660 subject-days), A38 (диагностика и коррекция fallback-профиля), A39 (перезапуск ключевых сравнений на
-  валидных профилях), A40 (канонический строгий пересчёт), A41 (диагностика оставшегося longest-low), A42 (source review кинетики подкожного инсулина), A43 (проверка варианта lispro), A44 (кривая действия инсулина против литературы).
+  валидных профилях), A40 (канонический строгий пересчёт), A41 (диагностика оставшегося longest-low), A42 (source review кинетики подкожного инсулина), A43 (проверка варианта lispro), A44 (кривая действия инсулина против литературы), A45 (строгий перепрогон оставшихся
+  сравнений), A46 (деривация параметров Lyumjev — negative).
   Сводка на английском: [`docs/acceptance/SUMMARY.en.md`](docs/acceptance/SUMMARY.en.md);
   на русском: [`docs/acceptance/SUMMARY.ru.md`](docs/acceptance/SUMMARY.ru.md).
 - What-if на своих данных Nightscout: W1 (импорт), W2 (паритет replay — red, с документированным

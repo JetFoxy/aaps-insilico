@@ -326,6 +326,22 @@ glucose nadir is therefore a dose/meal/controller interaction, not an over-long 
 model-tuning line closes: remaining `diurnal`, `hypo_reb` and longest-low need new controller/data,
 not coefficient changes. Report: `A44.md`.
 
+### A45 — strict rerun of the remaining comparisons
+
+A1 and A13 are unchanged (their first subjects are all valid). A16 with M3: autoISF +1.6 pp TIR /
++1.0 TBR and DynISF +1.2/+1.2 vs off; on the model CF DynISF dominates by +8.9 pp TIR, −15.2 pp
+TBR and −4.23 LBGI vs off. A22: announced-snack TIR +3.2 pp (p=0.001), announced-error +1.5 pp
+(p=0.001), TBR zero. Faults: the mean penalties hold (autoISF TBR +1.1…2.7 pp, DynISF +1.9…4.6 pp,
+LBGI +0.32…0.45 / +0.59…0.98) but the paired medians are near zero except bolus delay — the burden
+is heavy-tailed. The broken model-CF branch in `dynisf_compare` was fixed here. Report: `A45.md`.
+
+### A46 — Lyumjev derivation (negative)
+
+Fitting the three-compartment model to the Lyumjev label mean curve (15 U) matches the 1–5 h points
+(3.5 % max error) but yields Tmax 77 min against the label's 57 and 50 % Cmax at 43 min against 13.
+The pre-registered criterion (≤15 % and Tmax 45–70) fails, so no `--insulin-pk lyumjev` variant is
+added. The tool and the negative result are kept. Report: `A46.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
