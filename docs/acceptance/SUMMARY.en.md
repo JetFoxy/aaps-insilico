@@ -268,6 +268,15 @@ most of the A37 tail. Excluding them (n=27): template worst `<54` 27.3 min/day (
 sits exactly at 50.0. `profile_for` now refuses the fallback; `--allow-profile-fallback` reproduces
 old runs. Report: `A38.md`.
 
+### A39 — key comparisons rerun on valid profiles
+
+A2, A14 and A25 rerun with the shared strict profile (27 valid subjects instead of 30). The
+directions hold. The off arm improves (TIR 0.714→0.740, TBR 0.070→0.037, LBGI 2.18→1.05); autoISF
+still loses TIR and adds TBR (FCL −1.3 pp TIR, +1.5 pp TBR, p=0.005); DynISF vs off is TIR
+−2.1 pp, TBR +3.2 pp, LBGI +0.91, so autoISF remains better on TBR; the gate still fails every
+arm (severe 0/1/3, worst 240–385 min/day below 54) with DynISF worst. Magnitudes are slightly
+smaller than the historical reports; absolute numbers should cite A39. Report: `A39.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an
