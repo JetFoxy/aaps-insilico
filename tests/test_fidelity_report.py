@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 from runner.fidelity_report import (
     compression_for, eligible_names, meal_plan_for, pack_traces, per_subject_stats,
-    profile_for, safety_from_loop,
+    physiology_subject, profile_for, safety_from_loop,
 )
 
 
@@ -89,3 +89,14 @@ def test_eligible_names_skip_infeasible_profiles_by_default():
     assert "adult#001" in strict
     allowed = eligible_names(subset, allow_fallback=True)
     assert "child#001" in allowed
+
+
+def test_physiology_subject_applies_lispro_only_when_asked():
+    from simcore.params import load_subject
+
+    subject = load_subject("adult#001")
+    assert physiology_subject(subject, "s2008", 1) is subject
+    variant = physiology_subject(subject, "lispro", 1)
+    assert variant is not subject
+    assert variant.params["tau"] > 0
+    assert variant.params["ka1"] != subject.params["ka1"]

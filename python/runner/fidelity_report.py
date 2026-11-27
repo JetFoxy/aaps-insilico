@@ -27,6 +27,7 @@ from runner.fidelity import SIGNATURES, evaluate, from_loop, in_real_range, repo
 from runner.metrics import compute_metrics
 from runner.profiles import eligible_names, profile_values
 from runner.options import RESIDUALS
+from simcore.insulin_pk import apply_lispro
 from simcore.variability import si_day
 from simcore.params import load_subjects
 from simcore.population import compute_cf, compute_cr, compute_tdi
@@ -34,6 +35,12 @@ from simcore.population import compute_cf, compute_cr, compute_tdi
 MEALS = [(7 * 60, 50.0), (13 * 60, 50.0), (19 * 60, 50.0)]
 SETTINGS = ROOT / "data/raw/settings.json"
 REAL_FILES = ("sibionics2.csv", "libre2.csv", "aidex.csv")
+
+
+def physiology_subject(subject, insulin_pk: str = "s2008", seed: int = 0):
+    if insulin_pk == "lispro":
+        return apply_lispro(subject, seed)
+    return subject
 
 
 def meal_plan_for(mode: str, days: int, seed: int, body_weight: float):
@@ -103,9 +110,11 @@ def profile_for(subject, allow_fallback: bool = False) -> AlgorithmProfile:
 
 
 def run_subject(task):
-    name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate, meal_plan, variability, allow_fallback = task
-    profile = profile_for(subject, allow_fallback)
+    (name, subject, behaviour, days, isf_cv, cr_cv, readings_limit, compression_rate,
+     meal_plan, variability, allow_fallback, insulin_pk) = task
     seed = zlib.crc32(name.encode()) & 0xFFFF
+    profile = profile_for(subject, allow_fallback)
+    subject = physiology_subject(subject, insulin_pk, seed)
     meals, snacks = meal_plan_for(
         meal_plan, days, seed, float(getattr(subject, "BW", 70.0))
     )
@@ -126,6 +135,7 @@ def run_subject(task):
             subject, bridge, profile, scenario,
             seed=seed, residuals=RESIDUALS, noise_kind="residuals",
             profile_schedule=schedule or None, readings_limit=readings_limit,
+            insulin_delay_min=float(subject.params.get("tau", 0.0)),
         )
     item = from_loop(loop, plasma=True)
     item.pop("insulin", None)
@@ -156,12 +166,13 @@ def model_traces(
     meal_plan: str = "fixed",
     variability: bool = False,
     allow_fallback: bool = False,
+    insulin_pk: str = "s2008",
     runner=None,
 ) -> tuple[list[dict], list[dict]]:
     names = eligible_names(subjects, allow_fallback)[:count]
     tasks = [
         (name, subjects[name], behaviour, days, isf_cv, cr_cv, readings_limit,
-         compression_rate, meal_plan, variability, allow_fallback)
+         compression_rate, meal_plan, variability, allow_fallback, insulin_pk)
         for name in names
     ]
     run = runner or run_subject
@@ -213,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", default="Fidelity scorecard")
     parser.add_argument("--dump-traces", default="")
     parser.add_argument("--allow-profile-fallback", action="store_true")
+    parser.add_argument("--insulin-pk", choices=("s2008", "lispro"), default="s2008")
     parser.add_argument("--out", default="docs/acceptance/A26.md")
     parser.add_argument("--json", default="out/fidelity_scorecard.json")
     args = parser.parse_args(argv)
@@ -226,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         workers=args.workers,
         compression_rate=args.compression_rate,
         meal_plan=args.meal_plan, variability=args.variability,
-        allow_fallback=args.allow_profile_fallback,
+        allow_fallback=args.allow_profile_fallback, insulin_pk=args.insulin_pk,
     )
     if args.dump_traces:
         np.savez_compressed(args.dump_traces, **pack_traces(cgm))
@@ -281,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         "readings_limit": args.readings_limit or None, "workers": args.workers,
         "compression_rate": args.compression_rate,
         "meal_plan": args.meal_plan, "variability": args.variability,
-        "allow_profile_fallback": args.allow_profile_fallback,
+        "allow_profile_fallback": args.allow_profile_fallback, "insulin_pk": args.insulin_pk,
         "per_subject": per_subject_stats(cgm),
         "safety": [
             {"subject": trace_item.get("subject", ""), **trace_item.get("safety", {})}

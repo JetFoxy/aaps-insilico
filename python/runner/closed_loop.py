@@ -87,6 +87,12 @@ def smb_ratio_for_cadence(profile: AlgorithmProfile, cadence_min: float) -> floa
     return profile.smb_ratio_3min * cadence_min / 3.0
 
 
+def bolus_offset_in_window(time_min: float, t0: float, t1: float, delay: float):
+    """The bolus time inside this cycle after the absorption delay, or None."""
+    effective = float(time_min) + float(delay)
+    return effective - t0 if t0 <= effective < t1 else None
+
+
 def meals_for_days(meals: list[tuple[float, float]], days: int) -> list[tuple[float, float]]:
     """Repeat a one-day meal plan on every day of a multi-day run."""
     return [
@@ -162,6 +168,7 @@ def run_closed_loop(
     noise_rho: float = 0.8,
     profile_schedule: list[tuple[float, AlgorithmProfile]] | None = None,
     readings_limit: int | None = None,
+    insulin_delay_min: float = 0.0,
 ) -> LoopResult:
     """temp_mode="planned" runs 30-min temps and reports minutes remaining; "cycle" is the legacy
     one-temp-per-cycle approximation."""
@@ -285,10 +292,11 @@ def run_closed_loop(
         )
         boluses = []
         for time_min, units in scenario.boluses:
-            if not t0 <= time_min < t1:
+            offset = bolus_offset_in_window(time_min, t0, t1, insulin_delay_min)
+            if offset is None:
                 continue
             boluses.append(Bolus(
-                time=max(0.0, time_min - t0), units=units * site_fraction,
+                time=max(0.0, offset), units=units * site_fraction,
                 duration=pump.config.bolus_duration_min,
             ))
             result.bolus_units_to_model += units * site_fraction
@@ -459,7 +467,9 @@ def run_closed_loop(
             if units > 0:
                 delivered = pump.bolus(units)
                 if delivered > 0:
-                    pending_boluses.append((t1 + pump.config.bolus_delay_min, delivered))
+                    pending_boluses.append(
+                    (t1 + pump.config.bolus_delay_min + insulin_delay_min, delivered)
+                )
                 applied_boluses.append({
                     "kind": "bolus", "ts": now_ms, "amount": delivered,
                     "type": "SMB", "isValid": True,
