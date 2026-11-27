@@ -297,6 +297,17 @@ after a 46 g meal. The mechanism is SMB stacking against the model's long insuli
 a layer artefact; a source-backed insulin-action change is required before touching it. Only one
 of 27 subjects crosses 120 min. Report: `A41.md`.
 
+### A42 — subcutaneous insulin kinetics: source review
+
+The model has no S2017 fast-analog delay (`τ`), and its `ka1/ka2/kd` are the S2008 regular-insulin
+values (`adult#001`: 0.0019 / 0.0078 / 0.0152, τ absent; 1 U nadir 365 min), while the bridge doses
+Lyumjev. The open-access lispro population (Schiavon 2018; Faggionato 2021, Table 2/3) gives
+τ 5.62 min, ka1 0.000134, ka2 0.0128 (BMI covariate), α = kd−ka2 0.0155 → kd 0.0283, with published
+lognormal spreads. A42 registers these values in the parameter registry and pre-registers an
+opt-in `--insulin-pk lispro` variant (default unchanged): shorter absorption peak and 1 U nadir,
+longest-low no worse, diurnal/TIR no worse. Values are for lispro, not Lyumjev, and not the S2017
+subject vector; the implementation is A43. Report: `A42.md`.
+
 ## What-if (W1–W4)
 
 - **W1 import:** Nightscout read-only client, encrypted AAPS settings export, 3-day window with an

@@ -42,10 +42,10 @@ beta,gastric_emptying_beta,unitless,,S2017 Appendix,todo
 b_gastric,gastric_emptying_b,unitless,,S2017 Appendix,todo
 c_gastric,gastric_emptying_c,unitless,,S2017 Appendix,todo
 f_bioavailability,carbohydrate_bioavailability,unitless,,S2017 Appendix,todo
-ka1,subcutaneous_insulin_absorption_fast,1/min,,S2017 Appendix A16,todo
-ka2,subcutaneous_insulin_absorption_slow,1/min,,S2017 Appendix A16,todo
-kd,subcutaneous_insulin_dissociation,1/min,,S2017 Appendix A17,todo
-tau,subcutaneous_insulin_delay,min,,S2017 Appendix A17 (ref 32),todo
+ka1,subcutaneous_insulin_absorption_fast,1/min,"0.000134 (omega 1.86; individual 0.000079-0.00824)",Schiavon 2018/Faggionato 2021 (lispro),published
+ka2,subcutaneous_insulin_absorption_slow,1/min,"0.0128 (omega 0.322; BMI covariate -0.0865 per m2/kg; individual 0.00418-0.0313)",Schiavon 2018/Faggionato 2021 (lispro),published
+kd,subcutaneous_insulin_dissociation,1/min,"0.0283 (ka2 + alpha; alpha 0.0155, omega 1.02)",Schiavon 2018/Faggionato 2021 (lispro),published
+tau,subcutaneous_insulin_delay,min,"5.62 (omega 0.731; individual 0.748-21.9)",Schiavon 2018/Faggionato 2021 (lispro),published
 Ts,subcutaneous_glucose_time_constant,min,,S2017 Appendix,todo
 xi,liver_glucagon_responsivity,mg/kg/min per pg/mL,,S2017 Appendix A5,todo
 kH,glucagon_action_rate,1/min,,S2017 Appendix,todo
